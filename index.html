@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>简报中心 · 日/周/月业务报告系统</title>
+<style>
+:root{
+  --bg:#f4f6fb; --card:#ffffff; --line:#e6e9f2; --ink:#1f2430; --ink2:#5b6472;
+  --ink3:#9aa3b2; --accent:#4f6ef7; --accent-weak:#eef1fe;
+  --up:#d5384a; --down:#1e9e62; --warn:#c77c1a;
+  --radius:12px; --shadow:0 1px 3px rgba(23,32,64,.06),0 4px 16px rgba(23,32,64,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--ink);font-size:14px;}
+.app{display:flex;min-height:100vh}
+
+/* ---------- sidebar ---------- */
+.sidebar{width:212px;flex:none;background:#fff;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.logo{display:flex;align-items:center;gap:10px;padding:20px 18px 16px}
+.logo .mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4f6ef7,#7a5cf0);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+.logo .t1{font-weight:700;font-size:15px}
+.logo .t2{font-size:11px;color:var(--ink3)}
+.nav{padding:6px 10px;flex:1}
+.nav .sec{font-size:11px;color:var(--ink3);padding:12px 8px 6px;letter-spacing:1px}
+.nav a{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;color:var(--ink2);
+  text-decoration:none;font-size:13.5px;margin-bottom:2px;cursor:pointer}
+.nav a:hover{background:#f2f4fa}
+.nav a.on{background:var(--accent-weak);color:var(--accent);font-weight:600}
+.nav a .ico{width:18px;text-align:center;flex:none}
+.side-foot{padding:14px 18px;font-size:11px;color:var(--ink3);border-top:1px solid var(--line)}
+
+/* ---------- main ---------- */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{height:58px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;
+  gap:14px;padding:0 26px;position:sticky;top:0;z-index:20}
+.topbar h1{font-size:16px;font-weight:700}
+.topbar .src{font-size:12px;color:var(--ink3);margin-left:auto;display:flex;align-items:center;gap:6px}
+.topbar .src b{color:var(--ink2);font-weight:600}
+.content{padding:22px 26px 40px;max-width:1180px;width:100%;margin:0 auto}
+
+/* ---------- period nav ---------- */
+.period-nav{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.period-nav .pbtn{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:8px;
+  cursor:pointer;color:var(--ink2);font-size:14px;line-height:1}
+.period-nav .pbtn:hover{border-color:var(--accent);color:var(--accent)}
+.period-nav select,.period-nav input[type=date]{
+  border:1px solid var(--line);background:#fff;border-radius:8px;height:30px;padding:0 8px;
+  font-size:13px;color:var(--ink);font-family:inherit}
+.period-nav .cur{font-size:13px;color:var(--ink2);margin-left:4px}
+.period-nav .spacer{flex:1}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;height:30px;padding:0 13px;
+  font-size:13px;color:var(--ink2);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#3d5ce5}
+.btn.danger{color:var(--up)}
+.btn.danger:hover{border-color:var(--up)}
+
+/* ---------- cards ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:18px 20px;margin-bottom:16px}
+.card h3{font-size:13.5px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card h3 .sub{font-weight:400;font-size:12px;color:var(--ink3)}
+.card h3 .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:14px 16px}
+.kpi .name{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;align-items:center}
+.kpi .val{font-size:23px;font-weight:700;margin:6px 0 8px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.kpi .delta{font-size:12px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px}
+.kpi .delta.up{color:var(--up);background:#fdeef0}
+.kpi .delta.down{color:var(--down);background:#e9f7f0}
+.kpi .delta.flat{color:var(--ink3);background:#f1f3f8}
+.kpi .cmp{font-size:11px;color:var(--ink3);margin-top:6px}
+
+.chart-box{width:100%;position:relative}
+.chart-box svg{display:block;width:100%}
+.tooltip{position:fixed;pointer-events:none;background:#2a3140;color:#fff;border-radius:8px;padding:8px 11px;
+  font-size:12px;line-height:1.7;z-index:99;display:none;box-shadow:0 4px 14px rgba(0,0,0,.18);white-space:nowrap}
+.tooltip .tt-t{color:#aab4c6;margin-bottom:2px}
+
+table.rt{width:100%;border-collapse:collapse;font-size:13px}
+table.rt th{font-size:12px;color:var(--ink3);font-weight:600;text-align:right;padding:8px 10px;
+  border-bottom:1px solid var(--line);white-space:nowrap}
+table.rt th:first-child{text-align:left}
+table.rt td{padding:9px 10px;text-align:right;border-bottom:1px solid #f0f2f7;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+table.rt td:first-child{text-align:left;color:var(--ink2)}
+table.rt tr:last-child td{border-bottom:none}
+table.rt tr.cur td{background:var(--accent-weak)}
+table.rt .d-up{color:var(--up)} table.rt .d-down{color:var(--down)} table.rt .d-flat{color:var(--ink3)}
+
+.summary{font-size:13.5px;line-height:2;color:var(--ink)}
+.summary b{color:var(--accent)}
+.summary .neg{color:var(--up)} .summary .pos{color:var(--down)}
+
+/* ---------- empty / data mgmt ---------- */
+.empty{padding:70px 20px;text-align:center;color:var(--ink3)}
+.empty .big{font-size:38px;margin-bottom:12px}
+.empty p{margin-bottom:16px}
+.dm-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dm-grid .card{margin-bottom:0}
+.file-drop{border:1.5px dashed #c9d1e3;border-radius:10px;padding:26px 16px;text-align:center;color:var(--ink2);
+  cursor:pointer;transition:.15s}
+.file-drop:hover{border-color:var(--accent);background:var(--accent-weak)}
+.file-drop .big{font-size:26px;margin-bottom:8px}
+.file-drop em{font-style:normal;font-size:12px;color:var(--ink3);display:block;margin-top:6px}
+textarea.paste{width:100%;height:130px;border:1px solid var(--line);border-radius:8px;padding:10px;
+  font-family:ui-monospace,Menlo,monospace;font-size:12px;resize:vertical;color:var(--ink)}
+.hint{font-size:12px;color:var(--ink3);line-height:1.8;margin-top:8px}
+.stat-row{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:4px}
+.stat-row .s .k{font-size:11px;color:var(--ink3);margin-bottom:3px}
+.stat-row .s .v{font-size:15px;font-weight:700}
+table.plain{width:100%;border-collapse:collapse;font-size:13px}
+table.plain th{font-size:12px;color:var(--ink3);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-weight:600}
+table.plain td{padding:7px 8px;border-bottom:1px solid #f0f2f7}
+table.plain input[type=text],table.plain select{border:1px solid var(--line);border-radius:6px;height:28px;
+  padding:0 7px;font-size:12.5px;font-family:inherit;color:var(--ink);background:#fff}
+table.plain input[type=checkbox]{accent-color:var(--accent)}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.badge.daily{background:#eef1fe;color:#4f6ef7}
+.badge.weekly{background:#e9f7f0;color:#1e9e62}
+.badge.monthly{background:#fdf1e3;color:#c77c1a}
+.snap-item{display:flex;align-items:center;gap:12px;padding:12px 6px;border-bottom:1px solid #f0f2f7}
+.snap-item:last-child{border-bottom:none}
+.snap-item .info{flex:1}
+.snap-item .info .t{font-weight:600;font-size:13.5px}
+.snap-item .info .m{font-size:11.5px;color:var(--ink3);margin-top:3px}
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:#2a3140;color:#fff;
+  padding:10px 20px;border-radius:10px;font-size:13px;z-index:200;display:none;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+
+@media (max-width:920px){.sidebar{display:none}.dm-grid{grid-template-columns:1fr}}
+@media print{
+  .sidebar,.topbar,.period-nav,.no-print{display:none!important}
+  body{background:#fff}
+  .content{padding:0;max-width:none}
+  .card{box-shadow:none;border-color:#ddd;break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar no-print">
+    <div class="logo">
+      <div class="mark">简</div>
+      <div><div class="t1">简报中心</div><div class="t2">日 / 周 / 月业务报告</div></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="sec">报告</div>
+      <a data-view="daily" class="on"><span class="ico">📈</span>日报</a>
+      <a data-view="weekly"><span class="ico">📊</span>周报</a>
+      <a data-view="monthly"><span class="ico">🗓️</span>月报</a>
+      <a data-view="yearly"><span class="ico">📆</span>年报</a>
+      <div class="sec">管理</div>
+      <a data-view="archive"><span class="ico">🗂️</span>报告归档</a>
+      <a data-view="data"><span class="ico">⚙️</span>数据管理</a>
+    </nav>
+    <div class="side-foot" id="sideFoot">数据仅保存在本机浏览器<br>不上传任何服务器</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar no-print">
+      <h1 id="pageTitle">日报</h1>
+      <div class="src">数据源：<b id="srcName">—</b> · <span id="srcRange">—</span></div>
+    </header>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" onerror="window.__noXLSX=true"></script>
+<script src="marketing-data.js"></script>
+<script>
+'use strict';
+/* =========================================================
+   简报中心 · 日/周/月业务报告系统（纯前端，数据存 localStorage）
+   ========================================================= */
+
+/* ---------- 全局状态 ---------- */
+const LS_DATA='reportHub.data.v1', LS_CFG='reportHub.cfg.v1', LS_SNAP='reportHub.snap.v1';
+let state={rows:[],columns:[],config:{},sourceName:''};
+let snapshots=[];
+let curView='daily';      // daily|weekly|monthly|yearly|archive|data
+let curPeriod=null;       // 当前报告期 key
+let chartMetric=null;     // 当前图表选中指标
+const COLORS=['#4f6ef7','#22a06b','#e8790a','#d5497f','#7c5cd6','#0e9bb5','#c95d2b'];
+
+/* ---------- 工具 ---------- */
+const $=s=>document.querySelector(s);
+function toast(msg){const t=$('#toast');t.textContent=msg;t.style.display='block';
+  clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2200);}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+
+function parseDateStr(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date&&!isNaN(v)){
+    const d2=new Date(v.getTime());
+    const h=d2.getHours(),mi=d2.getMinutes(),se=d2.getSeconds();
+    if(h===23&&mi===59&&se>=50)d2.setTime(d2.getTime()+60000);   // 贴近午夜的负向漂移 → 进位到次日
+    return d2s(d2);
+  }
+  if(typeof v==='number'){ if(v>20000&&v<60000){const d=new Date(Math.round((v-25569)*86400000));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;} return null; }
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4})[-\/年.](\d{1,2})[-\/月.](\d{1,2})[日]?(?:[ T].*)?$/);
+  if(m){const y=+m[1],mo=+m[2],d=+m[3];
+    if(mo>=1&&mo<=12&&d>=1&&d<=31)return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+  m=s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if(m){const mo=+m[1],d=+m[2],y=+m[3];
+    if(mo>=1&&mo<=12&&d>=1&&d<=31)return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+  return null;
+}
+function d2s(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function parseNum(v){
+  if(v==null||v==='')return null;
+  if(typeof v==='number')return isFinite(v)?v:null;
+  let s=String(v).trim().replace(/[,\s￥¥$%]/g,'');
+  if(s==='')return null;
+  const n=parseFloat(s);
+  return isFinite(n)?n:null;
+}
+function getISOWeek(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const dayNum=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-dayNum+3);
+  const firstThursday=new Date(d.getFullYear(),0,4);
+  const week=1+Math.round(((d-firstThursday)/86400000-3+((firstThursday.getDay()+6)%7))/7);
+  return {year:d.getFullYear(),week};
+}
+function weekKeyOf(dateStr){const w=getISOWeek(dateStr);return `${w.year}-W${String(w.week).padStart(2,'0')}`;}
+function weekRangeLabel(key){
+  const [y,w]=key.split('-W').map(Number);
+  const jan4=new Date(y,0,4);
+  const dayNum=(jan4.getDay()+6)%7;
+  const monday=new Date(jan4);monday.setDate(jan4.getDate()-dayNum+(w-1)*7);
+  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
+  const f=d=>`${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${f(monday)} ~ ${f(sunday)}`;
+}
+function monthKeyOf(dateStr){return dateStr.slice(0,7);}
+function monthLabel(key){const[y,m]=key.split('-');return `${y} 年 ${+m} 月`;}
+function addDays(s,n){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return d2s(d);}
+
+/* ---------- 格式化 ---------- */
+function compactNum(v){
+  const a=Math.abs(v);
+  if(a>=1e8)return (v/1e8).toFixed(2).replace(/\.?0+$/,'')+'亿';
+  if(a>=1e4)return (v/1e4).toFixed(1).replace(/\.0$/,'')+'万';
+  return v.toLocaleString('zh-CN',{maximumFractionDigits:2});
+}
+function fmtVal(v,fmt){
+  if(v==null||isNaN(v))return '—';
+  switch(fmt){
+    case 'cny':return '¥'+compactNum(Math.round(v));
+    case 'pct':return v.toFixed(2)+'%';
+    case 'float2':return v.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+    default:return Math.round(v).toLocaleString('zh-CN');
+  }
+}
+function fmtValAxis(v,fmt){
+  if(fmt==='pct')return v.toFixed(1)+'%';
+  if(fmt==='cny')return '¥'+compactNum(v);
+  return compactNum(v);
+}
+
+/* ---------- 聚合 ---------- */
+function aggRows(rows,metric){
+  const cfg=state.config[metric]||{agg:'sum'};
+  const vals=rows.map(r=>r.values[metric]).filter(v=>v!=null&&!isNaN(v));
+  if(!vals.length)return null;
+  if(cfg.agg==='avg')return vals.reduce((a,b)=>a+b,0)/vals.length;
+  if(cfg.agg==='last'){
+    const sorted=[...rows].sort((a,b)=>a.date<b.date?-1:1);
+    for(let i=sorted.length-1;i>=0;i--){const v=sorted[i].values[metric];if(v!=null&&!isNaN(v))return v;}
+  }
+  return vals.reduce((a,b)=>a+b,0);
+}
+function groupBy(rows,keyFn){
+  const map=new Map();
+  for(const r of rows){const k=keyFn(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r);}
+  return map;
+}
+
+/* ---------- 指标配置推测 ---------- */
+function guessCfg(col){
+  const name=col.toLowerCase();
+  const cfg={name:col,agg:'sum',fmt:'int',invert:false,core:true};
+  if(/率|占比|percent|ratio/.test(name)){cfg.agg='avg';cfg.fmt='pct';cfg.invert=true;}
+  else if(/退款|推广|支出|成本/.test(name)){cfg.fmt='cny';cfg.invert=true;}
+  else if(/额|价|收入|金额|营收|gmv|cost|price|amount/.test(name)){cfg.fmt='cny';}
+  else if(/客单|arpu|均值/.test(name)){cfg.agg='avg';cfg.fmt='float2';}
+  return cfg;
+}
+function coreColumns(){
+  const c=state.columns.filter(col=>{const cfg=state.config[col];return !cfg||cfg.core!==false;});
+  return c.length?c:state.columns.slice();
+}
+
+/* ---------- 数据导入 ---------- */
+function parseCSV(text){
+  const rows=[];let cur=[],val='',q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){val+='"';i++;} else q=false; } else val+=c; }
+    else if(c==='"')q=true;
+    else if(c===','){cur.push(val);val='';}
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n')i++; cur.push(val);val=''; if(cur.some(x=>x!==''))rows.push(cur); cur=[]; }
+    else val+=c;
+  }
+  cur.push(val); if(cur.some(x=>x!==''))rows.push(cur);
+  return rows.filter(r=>r.some(c=>String(c).trim()!==''));
+}
+function importTable(table,sourceName,mode){
+  if(table.length<2){toast('数据至少需要表头 + 1 行');return false;}
+  const header=table[0].map(h=>String(h).trim());
+  // 找日期列
+  let dateCol=-1,best=0;
+  for(let c=0;c<header.length;c++){
+    let hits=0,n=0;
+    for(let r=1;r<table.length&&r<=25;r++){n++;if(parseDateStr(table[r][c]))hits++;}
+    if(n&&hits/n>=0.6&&hits>best){best=hits;dateCol=c;}
+  }
+  if(dateCol<0){toast('未识别到日期列（支持 2026-08-22 / 2026/8/22 / 8/22/2026 等格式）');return false;}
+  // 数值列
+  const cols=[];
+  for(let c=0;c<header.length;c++){
+    if(c===dateCol)continue;
+    let hits=0,n=0;
+    for(let r=1;r<table.length&&r<=40;r++){const v=parseNum(table[r][c]);if(v!=null)hits++;else if(String(table[r][c]||'').trim()!=='')n++;}
+    if(hits>0&&hits>=Math.max(1,hits+n-3))cols.push(c);
+  }
+  if(!cols.length){toast('未识别到数值指标列');return false;}
+  const rows=[];
+  for(let r=1;r<table.length;r++){
+    const date=parseDateStr(table[r][dateCol]); if(!date)continue;
+    const values={};let ok=false;
+    for(const c of cols){const v=parseNum(table[r][c]);if(v!=null){values[header[c]]=v;ok=true;}}
+    if(ok)rows.push({date,values});
+  }
+  if(!rows.length){toast('没有可用的数据行');return false;}
+  rows.sort((a,b)=>a.date<b.date?-1:1);
+  // 追加模式：按日期合并进历史库（同日覆盖、异日新增），周报月报自动随累积数据更新
+  if(mode==='append'&&state.rows.length){
+    const byDate=new Map(state.rows.map(r=>[r.date,r]));
+    for(const r of rows){
+      if(byDate.has(r.date))Object.assign(byDate.get(r.date).values,r.values);
+      else byDate.set(r.date,{date:r.date,values:{...r.values}});
+    }
+    state.rows=[...byDate.values()].sort((a,b)=>a.date<b.date?-1:1);
+    const newCols=cols.map(c=>header[c]);
+    for(const c of newCols)if(!state.columns.includes(c))state.columns.push(c);
+    for(const c of newCols)if(!state.config[c])state.config[c]=guessCfg(c);
+    if(!chartMetric||!state.columns.includes(chartMetric))chartMetric=state.columns[0];
+    state.sourceName=`累积数据（最近导入：${sourceName}）`;
+    state.lastImportAt=new Date().toLocaleString('zh-CN');
+    state.dataUpdatedAt=Date.now();
+    curPeriod=null;
+    saveState();
+    toast(`已更新：本次 ${rows.length} 行（${rows[0].date} ~ ${rows[rows.length-1].date}），累计 ${state.rows.length} 天`);
+    render();
+    return true;
+  }
+  state.rows=rows;
+  state.columns=cols.map(c=>header[c]);
+  state.config={};
+  for(const col of state.columns)state.config[col]=guessCfg(col);
+  state.sourceName=sourceName;
+  state.lastImportAt=new Date().toLocaleString('zh-CN');
+  state.dataUpdatedAt=Date.now();
+  curPeriod=null;chartMetric=state.columns[0];
+  saveState();
+  toast(`导入成功：${rows.length} 行 · ${state.columns.length} 个指标`);
+  render();
+  return true;
+}
+function getImportMode(){const s=document.getElementById('importMode');return s&&s.value?s.value:'append';}
+
+/* ---------- 营销发展日报专用解析（识别「N月汇总」双层表头） ---------- */
+function normMetric(m){
+  if(m.indexOf('当日')===0)m=m.slice(2);
+  if(m.indexOf('日')===0)m=m.slice(1);
+  if(m==='推广/支出'||m==='推广')m='推广支出';
+  if(m.indexOf('净收')===0)m='净收入';
+  return m;
+}
+function mktColName(ch,m){
+  m=normMetric(m);
+  if(ch==='总览')return m==='收入'?'总收入':m==='支出'?'总支出':m;
+  return ch+m;
+}
+function parseMarketingWorkbook(wb,today){
+  const sheetNames=((wb&&wb.SheetNames)||[]).filter(n=>/^\d{1,2}月汇总$/.test(n));
+  if(!sheetNames.length)return null;
+  const byDate=new Map();const allCols=new Set();
+  for(const name of sheetNames){
+    const ws=wb.Sheets[name];if(!ws)continue;
+    if(ws['!ref']){  // 限制列数，避免个别表拖到 XFD 的超大空范围
+      const rg=XLSX.utils.decode_range(ws['!ref']);
+      if(rg.e.c>60)rg.e.c=60;
+      ws['!ref']=XLSX.utils.encode_range(rg);
+    }
+    const table=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    if(table.length<3)continue;
+    const r1=table[0]||[],r2=table[1]||[];
+    // 渠道分块：第一行有显式渠道名，或指标循环回到「收入」都视为新渠道
+    const blocks=[];let cur=null;
+    for(let c=1;c<r2.length;c++){
+      const raw=r2[c];
+      if(raw==null||String(raw).trim()==='')continue;
+      const m=normMetric(String(raw).trim());
+      const label=(r1[c]!=null&&String(r1[c]).trim()!=='')?String(r1[c]).trim():null;
+      if(label||(m==='收入'&&cur)){
+        let nm=label;
+        if(!nm){for(let k=c;k<Math.min(c+5,r1.length);k++){
+          if(r1[k]!=null&&String(r1[k]).trim()!==''){nm=String(r1[k]).trim();break;}}}
+        cur={name:nm||('渠道'+(blocks.length+1)),cols:[]};
+        blocks.push(cur);
+      }
+      if(cur)cur.cols.push({c,m});
+    }
+    for(let r=2;r<table.length;r++){
+      const row=table[r]||[];
+      const date=parseDateStr(row[0]);
+      if(!date||date>today)continue;          // 跳过汇总行与预填的未来日期
+      const values={};let nonZero=false;
+      for(const blk of blocks){
+        for(const cc of blk.cols){
+          const v=parseNum(row[cc.c]);
+          if(v==null)continue;
+          values[mktColName(blk.name,cc.m)]=Math.round(v*100)/100;
+          if(v!==0)nonZero=true;
+        }
+      }
+      if(!nonZero)continue;                    // 跳过整行全 0 的预填行
+      if(!byDate.has(date))byDate.set(date,{date,values:{}});
+      Object.assign(byDate.get(date).values,values);
+      for(const k in values)allCols.add(k);
+    }
+  }
+  if(!byDate.size)return null;
+  for(const row of byDate.values()){           // 派生指标：总退款 / 总销量
+    let rf=0,sl=0;
+    for(const k in row.values){
+      if(k.endsWith('退款'))rf+=row.values[k];
+      else if(k.endsWith('销量'))sl+=row.values[k];
+    }
+    row.values['总退款']=Math.round(rf*100)/100;
+    row.values['总销量']=sl;
+  }
+  allCols.add('总退款');allCols.add('总销量');
+  const core=['总收入','总支出','净收入','总退款','总销量'];
+  const chans=['淘宝','抖音','拼多多','小红书','tiktok'];
+  const mets=['收入','退款','推广支出','净收入','销量'];
+  const columns=core.filter(c=>allCols.has(c))
+    .concat(chans.reduce((acc,ch)=>acc.concat(mets.map(m=>ch+m)),[]).filter(c=>allCols.has(c)));
+  for(const c of Array.from(allCols).sort())if(!columns.includes(c))columns.push(c);
+  return {rows:Array.from(byDate.values()).sort((a,b)=>a.date<b.date?-1:1),columns};
+}
+function importMarketingWorkbook(wb){
+  const r=parseMarketingWorkbook(wb,d2s(new Date()));
+  if(!r)return false;
+  state.rows=r.rows;state.columns=r.columns;
+  state.config={};
+  const core=['总收入','总支出','净收入','总退款','总销量'];
+  for(const col of r.columns){
+    const cfg=guessCfg(col);cfg.core=core.includes(col);
+    state.config[col]=cfg;
+  }
+  state.sourceName='营销发展日报.xlsx';
+  state.lastImportAt=new Date().toLocaleString('zh-CN');
+  state.dataUpdatedAt=Date.now();
+  curPeriod=null;chartMetric=state.columns.includes('总收入')?'总收入':state.columns[0];
+  saveState();
+  toast(`营销日报导入成功：${r.rows.length} 天 · ${r.columns.length} 项指标`);
+  render();
+  return true;
+}
+function readFile(f){
+  const isXlsx=/\.(xlsx|xls)$/i.test(f.name);
+  if(isXlsx){
+    if(window.__noXLSX||typeof XLSX==='undefined'){toast('Excel 解析组件未加载（需要联网），请改用 CSV');return;}
+    const fr=new FileReader();
+    fr.onload=e=>{
+      try{
+        // 注意：不能用 cellDates —— SheetJS 0.18.5 在东八区会把日期转成差 43 秒不到午夜的 Date，
+        // 导致日期整体偏移一天；这里直接解析序列号（parseDateStr 的 UTC 分支），任何时区都稳定
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        if(importMarketingWorkbook(wb))return;
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const table=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+        importTable(table,f.name,getImportMode());
+      }catch(err){toast('解析失败：'+err.message);}
+    };
+    fr.readAsArrayBuffer(f);
+  }else{
+    const fr=new FileReader();
+    fr.onload=e=>{try{importTable(parseCSV(e.target.result),f.name,getImportMode());}catch(err){toast('解析失败：'+err.message);}};
+    fr.readAsText(f,'utf-8');
+  }
+}
+
+/* ---------- 演示数据 ---------- */
+function genDemo(){
+  const rnd=mulberry32(20260822);
+  const rows=[];const today=new Date();
+  for(let i=119;i>=0;i--){
+    const d=new Date(today);d.setDate(d.getDate()-i);
+    const dow=d.getDay();const wk=(dow===0||dow===6)?0.72:1+(dow===5?0.08:0);
+    const trend=1+(119-i)*0.0045;
+    const n=()=>1+(rnd()-0.5)*0.16;
+    const orders=Math.round(318*wk*trend*n());
+    const aov=88+rnd()*10+(119-i)*0.05;
+    const gmv=orders*aov;
+    const users=Math.round(1520*wk*trend*n());
+    const refund=2.1+rnd()*1.4;
+    rows.push({date:d2s(d),values:{
+      '销售额':Math.round(gmv),'订单量':orders,'新增用户':users,
+      '客单价':+aov.toFixed(2),'退款率':+refund.toFixed(2)
+    }});
+  }
+  state.rows=rows;
+  state.columns=['销售额','订单量','新增用户','客单价','退款率'];
+  state.config={
+    '销售额':{name:'销售额',agg:'sum',fmt:'cny',invert:false},
+    '订单量':{name:'订单量',agg:'sum',fmt:'int',invert:false},
+    '新增用户':{name:'新增用户',agg:'sum',fmt:'int',invert:false},
+    '客单价':{name:'客单价',agg:'avg',fmt:'float2',invert:false},
+    '退款率':{name:'退款率',agg:'avg',fmt:'pct',invert:true}
+  };
+  state.sourceName='演示数据（近 120 天）';
+  chartMetric='销售额';
+}
+
+/* ---------- 持久化 ---------- */
+function saveState(){
+  try{localStorage.setItem(LS_DATA,JSON.stringify({rows:state.rows,columns:state.columns,sourceName:state.sourceName,lastImportAt:state.lastImportAt||'',
+      dataUpdatedAt:state.dataUpdatedAt||0,autoArchived:state.autoArchived||null}));
+      localStorage.setItem(LS_CFG,JSON.stringify(state.config));}catch(e){}
+}
+function saveSnaps(){try{localStorage.setItem(LS_SNAP,JSON.stringify(snapshots));}catch(e){toast('归档存储空间不足');}}
+function loadAll(){
+  try{
+    const d=JSON.parse(localStorage.getItem(LS_DATA)||'null');
+    const c=JSON.parse(localStorage.getItem(LS_CFG)||'null');
+    snapshots=JSON.parse(localStorage.getItem(LS_SNAP)||'[]');
+    if(d&&d.rows&&d.rows.length){state.rows=d.rows;state.columns=d.columns;state.sourceName=d.sourceName;
+      state.lastImportAt=d.lastImportAt||'';
+      state.dataUpdatedAt=d.dataUpdatedAt||0;state.autoArchived=d.autoArchived||null;
+      state.config=c||{};for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
+      chartMetric=state.columns[0];return;}
+  }catch(e){}
+  if(window.EMBEDDED_DATA&&window.EMBEDDED_DATA.rows&&window.EMBEDDED_DATA.rows.length){
+    const d=window.EMBEDDED_DATA;
+    state.rows=d.rows;state.columns=d.columns;state.sourceName=d.sourceName||'营销发展日报';
+    state.config=d.config||{};state.lastImportAt='';
+    for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
+    chartMetric=state.columns.includes('总收入')?'总收入':state.columns[0];
+    return;
+  }
+  genDemo();saveState();
+}
+
+/* ---------- 报告构建 ---------- */
+function periodsOf(type){
+  if(!state.rows.length)return[];
+  if(type==='daily')return [...new Set(state.rows.map(r=>r.date))].sort();
+  if(type==='weekly')return [...new Set(state.rows.map(r=>weekKeyOf(r.date)))].sort();
+  if(type==='yearly')return [...new Set(state.rows.map(r=>r.date.slice(0,4)))].sort();
+  return [...new Set(state.rows.map(r=>monthKeyOf(r.date)))].sort();
+}
+function keyOfDate(type,dateStr){
+  if(type==='daily')return dateStr;
+  if(type==='weekly')return weekKeyOf(dateStr);
+  if(type==='yearly')return dateStr.slice(0,4);
+  return monthKeyOf(dateStr);
+}
+function periodTitle(type,key){
+  if(type==='daily'){const d=new Date(key+'T00:00:00');
+    const wd=['日','一','二','三','四','五','六'][d.getDay()];
+    return `${key.replace(/-/g,'/')}（周${wd}）`;}
+  if(type==='weekly')return `${key.split('-W')[0]} 年第 ${+key.split('-W')[1]} 周（${weekRangeLabel(key)}）`;
+  if(type==='yearly')return `${key} 年`;
+  return monthLabel(key);
+}
+function prevKey(list,key){const i=list.indexOf(key);return i>0?list[i-1]:null;}
+function nextKey(list,key){const i=list.indexOf(key);return i>=0&&i<list.length-1?list[i+1]:null;}
+
+function buildReport(type,key){
+  const list=periodsOf(type);
+  const groups=groupBy(state.rows,r=>keyOfDate(type,r.date));
+  const curRows=groups.get(key)||[];
+  const pk=prevKey(list,key);
+  const prevRows=pk?(groups.get(pk)||[]):[];
+  const prevTitle=pk?periodTitle(type,pk):'上一期';
+
+  const kpiCols=coreColumns();
+  const kpis=kpiCols.map((col,i)=>{
+    const cfg=state.config[col]||guessCfg(col);
+    const cur=aggRows(curRows,col), prev=aggRows(prevRows,col);
+    let delta=null;
+    if(cur!=null&&prev!=null&&prev!==0)delta=(cur-prev)/Math.abs(prev)*100;
+    return {col,name:cfg.name||col,cur,prev,delta,fmt:cfg.fmt,invert:!!cfg.invert,color:COLORS[i%COLORS.length]};
+  });
+
+  // 年报：按月展开（1-12 月 + 全年汇总行），图表用月维度、明细正序
+  if(type==='yearly'){
+    const year=key,mg=groupBy(state.rows,r=>monthKeyOf(r.date));
+    const chartKeys=[],chartLabels=[];
+    for(let m=1;m<=12;m++){chartKeys.push(`${year}-${String(m).padStart(2,'0')}`);chartLabels.push(m+'月');}
+    const chartData={};
+    for(const col of state.columns)chartData[col]=chartKeys.map(k=>aggRows(mg.get(k)||[],col));
+    const tableRows=chartKeys.map(k=>({key:k,label:monthLabel(k),vals:kpiCols.map(col=>aggRows(mg.get(k)||[],col))}));
+    tableRows.push({key:year,label:`${year} 年 全年`,vals:kpiCols.map(col=>aggRows(curRows,col))});
+    return {type,key,title:periodTitle(type,key),prevTitle,pk,nk:nextKey(list,key),
+      kpis,chartLabels,chartKeys,chartData,tableRows,tableAsc:true,
+      rowsN:curRows.length,hasData:curRows.length>0,
+      summary:buildSummary(type,key,kpis,list,groups,chartKeys)};
+  }
+
+  // 图表数据：近 N 期（日30/周12/月12），含每个指标序列
+  const N=type==='daily'?30:12;
+  const idx=list.indexOf(key);
+  const start=Math.max(0,idx-N+1);
+  const chartKeys=list.slice(start,idx+1);
+  const chartLabels=chartKeys.map(k=>type==='daily'?k.slice(5).replace('-','/'):
+    type==='weekly'?'W'+(+k.split('-W')[1]):+(k.split('-')[1])+'月');
+  const chartData={};
+  for(const col of state.columns){
+    chartData[col]=chartKeys.map(k=>aggRows(groups.get(k)||[],col));
+  }
+  // 明细表：近 8 期
+  const tStart=Math.max(0,idx-7);
+  const tableKeys=list.slice(tStart,idx+1).reverse();
+  const tableRows=tableKeys.map(k=>{
+    const row={key:k,label:periodTitle(type,k),vals:kpiCols.map(col=>aggRows(groups.get(k)||[],col))};
+    return row;
+  });
+
+  return {type,key,title:periodTitle(type,key),prevTitle,pk,nk:nextKey(list,key),
+    kpis,chartLabels,chartKeys,chartData,tableRows,
+    rowsN:curRows.length,hasData:curRows.length>0,
+    summary:buildSummary(type,key,kpis,list,groups,chartKeys)};
+}
+
+function buildSummary(type,key,kpis,list,groups,chartKeys){
+  if(!kpis.length)return '';
+  const tName={daily:'当日',weekly:'本周',monthly:'本月',yearly:'本年'}[type]||'本期';
+  const valid=kpis.filter(k=>k.cur!=null);
+  if(!valid.length)return '当期无数据。';
+  const ups=valid.filter(k=>k.delta!=null&&k.delta>0.5);
+  const downs=valid.filter(k=>k.delta!=null&&k.delta<-0.5);
+  const parts=[];
+  // 1. 总览（配色修正：上涨红 neg、下跌绿 pos）
+  parts.push(`${tName}共统计 <b>${valid.length}</b> 项核心指标：`+
+    `<span class="neg">${ups.length} 项上涨</span>、<span class="pos">${downs.length} 项下跌</span>。`);
+  // 2. 投产比洞察
+  const gcol=n=>kpis.find(k=>k.col===n);
+  const ni=gcol('净收入'),te=gcol('总支出'),rv=gcol('总收入');
+  if(ni&&te&&ni.cur!=null&&te.cur!=null&&te.cur!==0){
+    const roas=ni.cur/te.cur;
+    let line=`投产比（净收入/支出）为 <b>${(roas*100).toFixed(0)}%</b>`;
+    if(ni.prev!=null&&te.prev!=null&&te.prev!==0){
+      const proas=ni.prev/te.prev,dr=(roas-proas)/Math.abs(proas)*100,good=dr>0;
+      line+=`，较上期${good?'提升':'下降'} <b>${Math.abs(dr).toFixed(1)}%</b>（上期 ${(proas*100).toFixed(0)}%），<span class="${good?'neg':'pos'}">${good?'投产效率改善':'投产效率下滑，多花钱未换来等比例收入'}</span>`;
+    }
+    if(rv&&rv.cur!=null&&rv.cur!==0){
+      line+=`；总推广投产比（收入/支出）<b>${(rv.cur/te.cur*100).toFixed(0)}%</b>`;
+    }
+    parts.push(line+'。');
+  }
+  // 3. Top3 变化幅度
+  const ranked=valid.filter(k=>k.delta!=null).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+  for(const k of ranked.slice(0,3)){
+    const dir=k.delta>0?'增长':'下降';
+    const good=k.invert?k.delta<0:k.delta>0;
+    parts.push(`<b>${esc(k.name)}</b> 报 ${fmtVal(k.cur,k.fmt)}，环比${dir} <b>${Math.abs(k.delta).toFixed(1)}%</b>，<span class="${good?'neg':'pos'}">${good?'表现良好':'需关注'}</span>。`);
+  }
+  // 4. 异常波动预警（|环比|≥20%）
+  const abn=valid.filter(k=>k.delta!=null&&Math.abs(k.delta)>=20);
+  if(abn.length){
+    parts.push(`⚠️ 异常波动：${abn.map(k=>`<b>${esc(k.name)}</b>(${k.delta>0?'+':''}${k.delta.toFixed(0)}%)`).join('、')}，变化幅度超 20%，建议排查原因。`);
+  }
+  // 5. 近期新高/新低
+  for(const k of valid){
+    const series=chartKeys.map(kk=>aggRows(groups.get(kk)||[],k.col)).filter(v=>v!=null);
+    if(series.length>=5&&k.cur!=null&&k.cur===Math.max(...series))
+      parts.push(`<b>${esc(k.name)}</b> 创近 ${series.length} 期<b>新高</b>。`);
+    else if(series.length>=5&&k.cur===Math.min(...series)&&!k.invert)
+      parts.push(`<b>${esc(k.name)}</b> 为近 ${series.length} 期最低值，建议排查原因。`);
+    if(parts.length>=7)break;
+  }
+  return parts.join('');
+}
+
+/* ---------- SVG 图表 ---------- */
+const tooltip=()=>$('#tooltip');
+function renderChart(el,labels,series,fmt){
+  el.innerHTML='';
+  const W=Math.max(el.clientWidth||760,320),H=250;
+  const pl=56,pr=14,pt=14,pb=26,n=labels.length;
+  if(!n||series.every(s=>s.values.every(v=>v==null))){el.innerHTML='<div class="empty" style="padding:40px">暂无图表数据</div>';return;}
+  let max=-Infinity,min=Infinity;
+  series.forEach(s=>s.values.forEach(v=>{if(v!=null){if(v>max)max=v;if(v<min)min=v;}}));
+  if(!isFinite(max)){max=1;min=0;}
+  if(min>0)min=Math.min(0,min*0.9); if(max<0)max=0;
+  if(max===min){max=min+1;}
+  const pad=(max-min)*0.08;max+=pad;
+  const X=i=>n===1?(pl+pr)/2:pl+(W-pl-pr)*i/(n-1);
+  const Y=v=>pt+(H-pt-pb)*(1-(v-min)/(max-min));
+  let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+  // 网格
+  for(let g=0;g<=4;g++){
+    const v=min+(max-min)*g/4,y=Y(v);
+    svg+=`<line x1="${pl}" y1="${y}" x2="${W-pr}" y2="${y}" stroke="#eef1f6" stroke-width="1"/>`;
+    svg+=`<text x="${pl-8}" y="${y+4}" text-anchor="end" font-size="10.5" fill="#9aa3b2">${esc(fmtValAxis(v,fmt))}</text>`;
+  }
+  // x 标签（最多 8 个）
+  const step=Math.ceil(n/8);
+  labels.forEach((l,i)=>{if(i%step===0||i===n-1)
+    svg+=`<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="10.5" fill="#9aa3b2">${esc(l)}</text>`;});
+  const first=series[0];
+  if(first.mode==='bar'){
+    const bw=Math.max(4,(W-pl-pr)/n*0.55);
+    first.values.forEach((v,i)=>{
+      if(v==null)return;
+      const x=X(i)-bw/2,y=Y(Math.max(v,min));
+      svg+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(1,H-pb-y)}" rx="2.5" fill="${first.color}" opacity="0.85"/>`;
+    });
+  }else{
+    series.forEach(s=>{
+      let d='',started=false;
+      s.values.forEach((v,i)=>{if(v==null){started=false;return;}
+        d+=(started?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' ';started=true;});
+      if(!d)return;
+      if(s===first){
+        const pts=s.values.map((v,i)=>v==null?null:[X(i),Y(v)]).filter(Boolean);
+        if(pts.length>1){
+          let area=`M${pts[0][0]} ${Y(Math.max(min,0))} `;
+          pts.forEach(p=>area+=`L${p[0].toFixed(1)} ${p[1].toFixed(1)} `);
+          area+=`L${pts[pts.length-1][0]} ${Y(Math.max(min,0))} Z`;
+          svg+=`<path d="${area}" fill="${s.color}" opacity="0.08"/>`;
+        }
+      }
+      svg+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dashed?'stroke-dasharray="5 4"':''} stroke-linejoin="round" stroke-linecap="round"/>`;
+      if(s===first)s.values.forEach((v,i)=>{if(v!=null&&n<=32)
+        svg+=`<circle cx="${X(i)}" cy="${Y(v)}" r="2.6" fill="#fff" stroke="${s.color}" stroke-width="1.6"/>`;});
+    });
+  }
+  svg+='</svg>';
+  // 悬浮层
+  const wrap=document.createElement('div');
+  wrap.innerHTML=svg;
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:absolute;inset:0;display:flex;';
+  labels.forEach((l,i)=>{
+    const hz=document.createElement('div');
+    hz.style.cssText=`flex:1;cursor:crosshair;`;
+    hz.addEventListener('mousemove',e=>{
+      const tt=tooltip();
+      let html=`<div class="tt-t">${esc(l)}</div>`;
+      series.forEach(s=>{const v=s.values[i];
+        html+=`<div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:5px"></span>${esc(s.name)}：${v==null?'—':fmtVal(v,fmt)}</div>`;});
+      tt.innerHTML=html;tt.style.display='block';
+      const tw=tt.offsetWidth;
+      tt.style.left=Math.min(e.clientX+14,window.innerWidth-tw-10)+'px';
+      tt.style.top=(e.clientY+14)+'px';
+      const hl=wrap.querySelector('.hover-line');if(hl)hl.remove();
+      const svgEl=wrap.querySelector('svg');
+      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',X(i));line.setAttribute('x2',X(i));
+      line.setAttribute('y1',pt);line.setAttribute('y2',H-pb);
+      line.setAttribute('stroke','#c9d1e3');line.setAttribute('stroke-dasharray','3 3');
+      line.setAttribute('class','hover-line');
+      svgEl.appendChild(line);
+    });
+    hz.addEventListener('mouseleave',()=>{tooltip().style.display='none';
+      const hl=wrap.querySelector('.hover-line');if(hl)hl.remove();});
+    overlay.appendChild(hz);
+  });
+  el.style.position='relative';
+  el.appendChild(wrap);el.appendChild(overlay);
+}
+function movingAvg(arr,w){
+  return arr.map((_,i)=>{
+    const s=arr.slice(Math.max(0,i-w+1),i+1).filter(v=>v!=null);
+    return s.length?+ (s.reduce((a,b)=>a+b,0)/s.length).toFixed(4):null;
+  });
+}
+
+/* ---------- 视图渲染 ---------- */
+const VIEW_NAMES={daily:'日报',weekly:'周报',monthly:'月报',yearly:'年报',archive:'报告归档',data:'数据管理'};
+
+function render(){
+  $('#pageTitle').textContent=VIEW_NAMES[curView];
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.view===curView));
+  const src=state.rows.length?
+    `${state.sourceName||'自定义数据'} · ${state.rows.length} 行`:'未导入数据';
+  $('#srcName').textContent=src;
+  $('#srcRange').textContent=state.rows.length?
+    `${state.rows[0].date} ~ ${state.rows[state.rows.length-1].date}`:'';
+  const c=$('#content');
+  if(curView==='data'){renderDataMgr(c);return;}
+  if(curView==='archive'){renderArchive(c);return;}
+  renderReportView(c);
+}
+
+function periodNavHtml(type,key){
+  const list=periodsOf(type);
+  if(!list.length)return '';
+  if(!key||!list.includes(key))key=list[list.length-1];
+  let sel='';
+  if(type==='daily'){
+    sel=`<input type="date" id="datePick" value="${key}" min="${list[0]}" max="${list[list.length-1]}">`;
+  }else{
+    const opts=list.map(k=>`<option value="${k}" ${k===key?'selected':''}>${periodTitle(type,k)}</option>`).join('');
+    sel=`<select id="periodSel">${opts}</select>`;
+  }
+  return `<div class="period-nav no-print">
+    <button class="pbtn" id="pPrev" ${prevKey(list,key)?'':'disabled style="opacity:.35"'}>‹</button>
+    ${sel}
+    <button class="pbtn" id="pNext" ${nextKey(list,key)?'':'disabled style="opacity:.35"'}>›</button>
+    <button class="btn" id="pLatest">最新一期</button>
+    <button class="btn" id="addDataBtn">➕ 录入今日数据</button>
+    <div class="spacer"></div>
+    <button class="btn primary" id="snapBtn">📥 存入归档</button>
+    <button class="btn" id="printBtn">🖨️ 打印 / 导出 PDF</button>
+  </div>`;
+}
+
+function renderReportView(c,snapshot){
+  const type=snapshot?snapshot.type:curView;
+  let rep;
+  if(snapshot){rep=snapshot.rep;}
+  else{
+    const list=periodsOf(type);
+    if(!list.length){c.innerHTML='<div class="card"><div class="empty"><div class="big">📭</div><p>还没有数据，先去「数据管理」导入或恢复演示数据</p><button class="btn primary" onclick="switchView(\'data\')">前往数据管理</button></div></div>';return;}
+    if(!curPeriod||!list.includes(curPeriod))curPeriod=list[list.length-1];
+    rep=buildReport(type,curPeriod);
+  }
+  if(!chartMetric||!state.columns.includes(chartMetric))chartMetric=state.columns[0]||null;
+
+  let html= snapshot?
+    `<div class="period-nav no-print"><button class="btn" id="backArc">← 返回归档列表</button>
+     <div class="spacer"></div><span style="font-size:12px;color:var(--ink3)">归档于 ${snapshot.createdAt}</span>
+     <button class="btn" id="printBtn">🖨️ 打印 / 导出 PDF</button></div>`:
+    periodNavHtml(type,rep.key);
+
+  const typeName={daily:'日报',weekly:'周报',monthly:'月报',yearly:'年报'}[type]||'报告';
+  html+=`<div style="margin:2px 0 14px">
+    <div style="font-size:20px;font-weight:700">${typeName} · ${esc(rep.title)}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-top:4px">
+      数据源：${esc(state.sourceName||'-')} · 覆盖 ${rep.rowsN} 条记录 · 环比基准：${esc(rep.prevTitle)}</div></div>`;
+
+  // KPI
+  html+='<div class="kpi-grid">';
+  for(const k of rep.kpis){
+    let deltaHtml='<span class="delta flat">— 无上期数据</span>';
+    if(k.delta!=null){
+      const up=k.delta>0;
+      const cls=Math.abs(k.delta)<0.5?'flat':(up?'up':'down');
+      const arrow=Math.abs(k.delta)<0.5?'≈':(up?'▲':'▼');
+      const colorCls=k.invert?(up?'d-down':'d-up'):(up?'d-up':'d-down');
+      deltaHtml=`<span class="delta ${cls}">${arrow} ${Math.abs(k.delta).toFixed(1)}%</span>`;
+      deltaHtml+=`<div class="cmp" style="color:var(--${colorCls==='d-up'?'up':'down'})">上期 ${fmtVal(k.prev,k.fmt)}</div>`;
+    }else if(k.prev==null&&k.cur!=null){deltaHtml='<span class="delta flat">— 首期</span>';}
+      html+=`<div class="kpi"><div class="name">${esc(k.name)}</div>
+      <div class="val">${k.cur==null?'—':fmtVal(k.cur,k.fmt)}</div>${deltaHtml}</div>`;
+  }
+  // 日报附加卡：当周净收入 / 当月净收入 / 当月净支出（累计至所选日，环比上期同期）
+  if(type==='daily'&&!snapshot){
+    const mk=rep.key.slice(0,7), day=+rep.key.slice(8,10);
+    const y=+mk.slice(0,4), m=+mk.slice(5,7);
+    const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
+    const prevMonthEnd=pm+'-'+String(Math.min(day,new Date(y,m-1,0).getDate())).padStart(2,'0');
+    const dow=(new Date(rep.key+'T00:00:00').getDay()+6)%7;           // 周一=0
+    const addDays=(ds,n)=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d2s(d);};
+    const ws=addDays(rep.key,-dow);                                    // 本周一
+    const accum=(col,from,to,prevFrom,prevTo)=>({
+      cur:aggRows(state.rows.filter(r=>r.date>=from&&r.date<=to),col),
+      prev:aggRows(state.rows.filter(r=>r.date>=prevFrom&&r.date<=prevTo),col)});
+    const card=(label,sub,col,cur,prev,invert,noPrevTxt)=>{
+      let deltaHtml=`<span class="delta flat">— ${noPrevTxt}</span>`;
+      if(cur!=null&&prev!=null&&prev!==0){
+        const dd=(cur-prev)/Math.abs(prev)*100, up=dd>0;
+        const good=invert?!up:up;                                       // invert：支出下降为好
+        deltaHtml=`<span class="delta ${Math.abs(dd)<0.5?'flat':(up?'up':'down')}">${Math.abs(dd)<0.5?'≈':(up?'▲':'▼')} ${Math.abs(dd).toFixed(1)}%</span>`+
+          `<div class="cmp" style="color:var(--${good?'up':'down'})">上期同期 ${fmtVal(prev,'cny')}</div>`;
+      }else if(cur!=null&&prev==null){deltaHtml='<span class="delta flat">— 首期</span>';}
+      return `<div class="kpi" style="background:linear-gradient(135deg,var(--card),rgba(46,102,177,.06))"><div class="name">${label} <span style="font-size:11px;color:var(--ink3)">${sub}</span></div>
+      <div class="val">${cur==null?'—':fmtVal(cur,'cny')}</div>${deltaHtml}</div>`;
+    };
+    if(state.columns.includes('净收入')){
+      const wk=accum('净收入',ws,rep.key,addDays(ws,-7),addDays(rep.key,-7));
+      const mo=accum('净收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
+      html+=card('当周净收入','本周累计','净收入',wk.cur,wk.prev,false,'上周同期无数据');
+      html+=card('当月净收入','月累计','净收入',mo.cur,mo.prev,false,'上月同期无数据');
+    }
+    if(state.columns.includes('总收入')){
+      const mo=accum('总收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
+      html+=card('当月总收入','月累计','总收入',mo.cur,mo.prev,false,'上月同期无数据');
+    }
+    if(state.columns.includes('总支出')){
+      const mo=accum('总支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
+      html+=card('当月净支出','月累计支出','总支出',mo.cur,mo.prev,true,'上月同期无数据');
+    }
+  }
+  html+='</div>';
+
+  // 图表
+  const metricOpts=state.columns.map(col=>{
+    const nm=(state.config[col]||{}).name||col;
+    return `<option value="${esc(col)}" ${col===chartMetric?'selected':''}>${esc(nm)}</option>`;}).join('');
+  html+=`<div class="card">
+    <h3>趋势 <span class="sub">近 ${rep.chartLabels.length} 期</span>
+      <div class="right no-print"><select id="chartMetricSel" style="border:1px solid var(--line);border-radius:8px;height:28px;padding:0 8px;font-size:12.5px;font-family:inherit">${metricOpts}</select></div>
+    </h3>
+    <div class="chart-box" id="chartBox"></div>
+    <div id="chartLegend" style="margin-top:10px;font-size:12px;color:var(--ink2);display:flex;gap:18px;flex-wrap:wrap"></div>
+  </div>`;
+
+  // 明细表
+  html+=`<div class="card"><h3>明细 <span class="sub">近 ${rep.tableRows.length} 期（环比上期）</span></h3><div style="overflow-x:auto"><table class="rt"><thead><tr><th>期间</th>`;
+  for(const k of rep.kpis)html+=`<th>${esc(k.name)}</th>`;
+  html+='</tr></thead><tbody>';
+  for(const row of rep.tableRows){
+    html+=`<tr class="${row.key===rep.key?'cur':''}"><td>${esc(row.label)}</td>`;
+    const ri=rep.tableRows.indexOf(row);
+    const prevRow=(rep.tableAsc&&String(row.key).length===4)?null:rep.tableRows[ri+(rep.tableAsc?-1:1)];
+    row.vals.forEach((v,i)=>{
+      let d='';
+      if(prevRow){const pv=prevRow.vals[i];
+        if(v!=null&&pv!=null&&pv!==0){const dd=(v-pv)/Math.abs(pv)*100;
+          if(Math.abs(dd)>=0.05){const up=dd>0;const good=rep.kpis[i].invert?!up:up;
+            d=`<br><span class="${good?'d-up':'d-down'}" style="font-size:11px">${up?'▲':'▼'}${Math.abs(dd).toFixed(1)}%</span>`;}}}
+      html+=`<td>${v==null?'—':fmtVal(v,rep.kpis[i].fmt)}${d}</td>`;
+    });
+    html+='</tr>';
+  }
+  html+='</tbody></table></div></div>';
+
+  // 同比环比矩阵：核心指标横评总表
+  html+=`<div class="card"><h3>同比环比矩阵 <span class="sub">核心指标横评 · 涨红跌绿</span></h3><div style="overflow-x:auto"><table class="rt"><thead><tr><th>指标</th><th style="text-align:right">本期</th><th style="text-align:right">上期</th><th style="text-align:right">环比</th><th>评估</th></tr></thead><tbody>`;
+  for(const k of rep.kpis){
+    let dc='<span class="d-flat">—</span>',stxt='—',scls='d-flat';
+    if(k.delta!=null){
+      const up=k.delta>0,good=k.invert?!up:up;
+      const cls=k.invert?(up?'d-down':'d-up'):(up?'d-up':'d-down');
+      dc=`<span class="${cls}">${up?'▲':'▼'} ${Math.abs(k.delta).toFixed(1)}%</span>`;
+      const ad=Math.abs(k.delta);
+      if(ad<5){stxt='平稳';scls='d-flat';}
+      else if(good){stxt='向好';scls='d-up';}
+      else{stxt='需关注';scls='d-down';}
+    }else if(k.cur!=null){stxt='首期';scls='d-flat';}
+    html+=`<tr><td>${esc(k.name)}</td><td style="text-align:right;font-weight:600">${k.cur==null?'—':fmtVal(k.cur,k.fmt)}</td><td style="text-align:right;color:var(--ink3)">${k.prev==null?'—':fmtVal(k.prev,k.fmt)}</td><td style="text-align:right">${dc}</td><td><span class="${scls}">${stxt}</span></td></tr>`;
+  }
+  html+='</tbody></table></div></div>';
+
+  // 数据洞察
+  html+=`<div class="card"><h3>数据洞察 <span class="sub">自动分析</span></h3><div class="summary">${rep.summary||'—'}</div></div>`;
+
+  c.innerHTML=html;
+
+  // 绑定事件
+  if(snapshot){
+    $('#backArc').onclick=()=>{curView='archive';render();};
+  }else{
+    const list=periodsOf(type);
+    $('#pPrev').onclick=()=>{const p=prevKey(list,rep.key);if(p){curPeriod=p;render();}};
+    $('#pNext').onclick=()=>{const nx=nextKey(list,rep.key);if(nx){curPeriod=nx;render();}};
+    $('#pLatest').onclick=()=>{curPeriod=list[list.length-1];render();};
+    $('#addDataBtn').onclick=()=>switchView('data');
+    const dp=$('#datePick');if(dp)dp.onchange=()=>{if(dp.value&&list.includes(dp.value)){curPeriod=dp.value;render();}};
+    const ps=$('#periodSel');if(ps)ps.onchange=()=>{curPeriod=ps.value;render();};
+    $('#snapBtn').onclick=()=>{addSnapshot(rep);};
+  }
+  $('#printBtn').onclick=()=>window.print();
+  const cms=$('#chartMetricSel');
+  if(cms)cms.onchange=()=>{chartMetric=cms.value;drawChart(rep);};
+
+  drawChart(rep);
+}
+
+function drawChart(rep){
+  const box=$('#chartBox');if(!box)return;
+  const metric=chartMetric||state.columns[0];
+  const kpi=rep.kpis.find(k=>k.col===metric)||{fmt:'int',color:COLORS[0],name:metric};
+  const series=[{name:kpi.name,values:rep.chartData[metric]||[],color:kpi.color,mode:rep.type==='daily'?'line':'bar'}];
+  const legend=[`<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${kpi.color};margin-right:6px"></span>${esc(kpi.name)}</span>`];
+  if(rep.type==='daily'){
+    const ma=movingAvg(rep.chartData[metric]||[],7);
+    series.push({name:'7 期移动平均',values:ma,color:'#e8790a',mode:'line',dashed:true});
+    legend.push(`<span><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #e8790a;margin-right:6px;vertical-align:middle"></span>7 期移动平均</span>`);
+  }
+  renderChart(box,rep.chartLabels,series,kpi.fmt);
+  const lg=$('#chartLegend');if(lg)lg.innerHTML=legend.join('');
+}
+
+/* ---------- 归档 ---------- */
+function addSnapshot(rep){
+  snapshots.unshift({id:Date.now()+''+Math.floor(Math.random()*1000),
+    type:rep.type,key:rep.key,title:rep.title,createdAt:new Date().toLocaleString('zh-CN'),
+    rep:JSON.parse(JSON.stringify(rep))});
+  if(snapshots.length>60)snapshots.length=60;
+  saveSnaps();toast('已存入归档');
+}
+function renderArchive(c){
+  if(!snapshots.length){
+    c.innerHTML=`<div class="card"><div class="empty"><div class="big">🗂️</div>
+      <p>归档还是空的。在日报 / 周报 / 月报页面点「存入归档」，即可保存当期报告快照。</p></div></div>`;
+    return;
+  }
+  let html='<div class="card"><h3>已归档报告 <span class="sub">最多保留 60 份，保存在本机</span></h3>';
+  for(const s of snapshots){
+    const tn=s.type==='daily'?'日报':s.type==='weekly'?'周报':'月报';
+    html+=`<div class="snap-item">
+      <span class="badge ${s.type}">${tn}</span>
+      <div class="info"><div class="t">${esc(s.title)}</div>
+        <div class="m">归档于 ${esc(s.createdAt)} · ${s.rep.kpis.length} 项指标</div></div>
+      <button class="btn" data-view-snap="${s.id}">查看</button>
+      <button class="btn danger" data-del-snap="${s.id}">删除</button>
+    </div>`;
+  }
+  html+='</div>';
+  c.innerHTML=html;
+  c.querySelectorAll('[data-view-snap]').forEach(b=>b.onclick=()=>{
+    const s=snapshots.find(x=>x.id===b.dataset.viewSnap);
+    if(s)renderReportView(c,s);
+  });
+  c.querySelectorAll('[data-del-snap]').forEach(b=>b.onclick=()=>{
+    snapshots=snapshots.filter(x=>x.id!==b.dataset.delSnap);
+    saveSnaps();renderArchive(c);toast('已删除');
+  });
+}
+
+/* ---------- 数据管理 ---------- */
+function renderDataMgr(c){
+  const n=state.rows.length;
+  let infoHtml;
+  if(n){
+    infoHtml=`<div class="stat-row">
+      <div class="s"><div class="k">数据源</div><div class="v">${esc(state.sourceName||'自定义')}</div></div>
+      <div class="s"><div class="k">已累积天数</div><div class="v">${n.toLocaleString()} 天</div></div>
+      <div class="s"><div class="k">日期范围</div><div class="v">${state.rows[0].date} ~ ${state.rows[n-1].date}</div></div>
+      <div class="s"><div class="k">指标数</div><div class="v">${state.columns.length}</div></div>
+      <div class="s"><div class="k">最近上报</div><div class="v">${esc(state.lastImportAt||'—')}</div></div>
+    </div>
+    <div class="hint">日报取你上报的最新一天；周报、月报由累积数据自动汇总，无需额外操作。</div>`;
+  }else{
+    infoHtml='<div class="hint">当前没有数据，请导入或载入演示数据。</div>';
+  }
+
+  let cfgRows='';
+  for(const col of state.columns){
+    const cfg=state.config[col]||guessCfg(col);
+    cfgRows+=`<tr>
+      <td style="color:var(--ink3)">${esc(col)}</td>
+      <td><input type="text" data-cfg="${esc(col)}" data-f="name" value="${esc(cfg.name||col)}" style="width:110px"></td>
+      <td><select data-cfg="${esc(col)}" data-f="agg">
+        <option value="sum" ${cfg.agg==='sum'?'selected':''}>求和</option>
+        <option value="avg" ${cfg.agg==='avg'?'selected':''}>平均</option>
+        <option value="last" ${cfg.agg==='last'?'selected':''}>期末值</option></select></td>
+      <td><select data-cfg="${esc(col)}" data-f="fmt">
+        <option value="int" ${cfg.fmt==='int'?'selected':''}>整数</option>
+        <option value="float2" ${cfg.fmt==='float2'?'selected':''}>两位小数</option>
+        <option value="cny" ${cfg.fmt==='cny'?'selected':''}>金额 ¥</option>
+        <option value="pct" ${cfg.fmt==='pct'?'selected':''}>百分比 %</option></select></td>
+      <td><input type="checkbox" data-cfg="${esc(col)}" data-f="core" ${cfg.core!==false?'checked':''}></td>
+      <td><input type="checkbox" data-cfg="${esc(col)}" data-f="invert" ${cfg.invert?'checked':''}></td>
+    </tr>`;
+  }
+
+  c.innerHTML=`
+  <div class="dm-grid" style="margin-bottom:16px">
+    <div class="card"><h3>📁 每日上报数据 <span class="sub">CSV / Excel</span></h3>
+      <div class="file-drop" id="fileDrop">
+        <div class="big">📄</div>
+        把更新后的「营销发展日报.xlsx」拖到这里即可更新全部数据
+        <em>自动识别各「N月汇总」表：双层表头、多渠道、预填空行都会处理</em>
+        <em>也支持通用 CSV / Excel（第一行为表头 + 日期列 + 数值列）</em>
+        <em>Excel 解析组件需联网加载，离线时请用 CSV（另存为 CSV UTF-8）</em>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12.5px;color:var(--ink2)">导入方式
+        <select id="importMode" style="border:1px solid var(--line);border-radius:8px;height:28px;padding:0 8px;font-size:12.5px;font-family:inherit">
+          <option value="append" selected>追加 / 更新（每天上报用这个）</option>
+          <option value="replace">替换全部数据</option>
+        </select></label>
+        <span class="hint" style="margin:0">同一天重复上报会覆盖当天数值，历史数据保留</span>
+      </div>
+      <div class="hint">系统自动识别日期列与指标列；文本列会被忽略。所有处理都在本机浏览器完成。</div>
+    </div>
+    <div class="card"><h3>📋 粘贴上报 <span class="sub">从 Excel 复制当天数据直接粘贴</span></h3>
+      <textarea class="paste" id="pasteArea" placeholder="日期,销售额,订单量&#10;2026-08-20,158000,1820&#10;2026-08-21,162400,1901&#10;2026-08-22,171200,2055"></textarea>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn primary" id="pasteBtn">导入粘贴内容</button>
+        <button class="btn" id="demoBtn">载入演示数据</button>
+      </div>
+      <div class="hint">适合从 Excel 里直接复制一段数据粘贴过来。</div>
+    </div>
+    <div class="card"><h3>🔗 自动同步数据源 <span class="sub">Excel 即配置 · 时间戳驱动</span></h3>
+      <div id="srcInfo" class="hint">正在读取当前同步配置…</div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="srcPathInput" placeholder="/Users/你/文件夹/营销发展日报.xlsx 或文件夹路径"
+          style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:8px;height:32px;padding:0 10px;font-size:12.5px;font-family:inherit">
+        <button class="btn primary" id="srcPathBtn">保存并切换</button>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        支持 <b>Excel 文件</b>或<b>整个文件夹</b>；文件夹模式会自动跟踪其中「修改时间最新」的 .xlsx，换文件、存新文件都自动跟。<br>
+        更新判断依据是<b>文件时间戳</b>：保存表格后约 5 秒内自动重新解析，报告随之刷新。修改配置立即生效，无需重启。
+      </div>
+    </div>
+  </div>
+  <div class="card"><h3>ℹ️ 当前数据</h3>${infoHtml}</div>
+  <div class="card"><h3>⚙️ 指标设置 <span class="sub">影响聚合方式、显示格式与涨跌好坏判断</span></h3>
+    ${state.columns.length?`<div style="overflow-x:auto"><table class="plain">
+      <thead><tr><th>字段</th><th>显示名</th><th>聚合方式</th><th>格式</th><th>核心指标</th><th>越小越好</th></tr></thead>
+      <tbody>${cfgRows}</tbody></table></div>
+      <div style="margin-top:12px"><button class="btn primary" id="saveCfgBtn">保存设置</button>
+      <span class="hint" style="display:inline;margin-left:8px">「核心指标」决定报告 KPI 卡片与明细表展示项；「越小越好」（如退款、支出）勾选后下降显示为利好</span></div>`
+      :'<div class="hint">导入数据后可在这里配置指标。</div>'}
+  </div>`;
+
+  const drop=$('#fileDrop');
+  drop.onclick=()=>$('#fileInput').click();
+  drop.ondragover=e=>{e.preventDefault();drop.style.background='var(--accent-weak)';};
+  drop.ondragleave=()=>drop.style.background='';
+  drop.ondrop=e=>{e.preventDefault();drop.style.background='';
+    if(e.dataTransfer.files[0])readFile(e.dataTransfer.files[0]);};
+  $('#fileInput').onchange=e=>{if(e.target.files[0])readFile(e.target.files[0]);e.target.value='';};
+  $('#pasteBtn').onclick=()=>{const t=$('#pasteArea').value.trim();
+    if(!t){toast('请先粘贴数据');return;}
+    try{importTable(parseCSV(t),'粘贴数据',getImportMode());}catch(err){toast('解析失败：'+err.message);}};
+  $('#demoBtn').onclick=()=>{genDemo();saveState();curPeriod=null;toast('已载入演示数据');render();};
+  // 自动同步数据源卡片（仅本地服务模式可用）
+  const srcInfo=$('#srcInfo'),srcInput=$('#srcPathInput'),srcBtn=$('#srcPathBtn');
+  if(!/^https?:$/.test(location.protocol)){
+    if(srcInfo)srcInfo.innerHTML='当前是直接打开的网页文件，自动同步未运行。<br>双击 <b>启动报告系统.command</b> 启动本地服务后，即可在此配置自动同步的数据源。';
+    if(srcInput)srcInput.disabled=true;if(srcBtn)srcBtn.disabled=true;
+  }else{
+    const refreshSrcInfo=()=>{
+      fetch('/api/config',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+        if(!srcInfo)return;
+        if(!d||!d.ok){srcInfo.textContent='读取同步配置失败';return;}
+        const modeTxt=d.mode==='dir'?'文件夹（跟踪时间戳最新的 xlsx）':d.mode==='file'?'Excel 文件':'⚠️ 目标不存在或无 Excel 文件';
+        srcInfo.innerHTML=`监视目标：<b>${esc(d.excelPath)}</b><br>当前解析：<b>${esc(d.sourceFile||'—')}</b>`+
+          (d.sourceMtime?`<br>文件时间戳：${new Date(d.sourceMtime).toLocaleString('zh-CN')}`:'')+
+          (d.parsedAt?`<br>最近同步：${esc(d.parsedAt)}${d.parsedDays?' · '+d.parsedDays+' 天数据':''}`:'')+
+          `<br>模式：${esc(modeTxt)}`;
+        if(srcInput&&!srcInput.value)srcInput.value=d.excelPath;
+      }).catch(()=>{if(srcInfo)srcInfo.textContent='本地服务未响应（可能已停止）。';});
+    };
+    refreshSrcInfo();
+    if(srcBtn)srcBtn.onclick=()=>{
+      const p=(srcInput.value||'').trim();
+      if(!p){toast('请先填写 Excel 文件或文件夹路径');return;}
+      srcBtn.disabled=true;srcBtn.textContent='切换中…';
+      fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excelPath:p})})
+        .then(r=>r.json()).then(d=>{
+          srcBtn.disabled=false;srcBtn.textContent='保存并切换';
+          if(d&&d.ok){toast('已切换数据源：'+(d.sourceFile||d.excelPath)+(d.days?'（'+d.days+' 天）':''));refreshSrcInfo();autoSyncNow(true);}
+          else toast('切换失败：'+((d&&d.error)||'未知错误'));
+        }).catch(()=>{srcBtn.disabled=false;srcBtn.textContent='保存并切换';toast('本地服务未响应');});
+    };
+  }
+  const scb=$('#saveCfgBtn');
+  if(scb)scb.onclick=()=>{
+    c.querySelectorAll('[data-cfg]').forEach(el=>{
+      const col=el.dataset.cfg,f=el.dataset.f;
+      if(!state.config[col])state.config[col]=guessCfg(col);
+      state.config[col][f]=(f==='invert'||f==='core')?el.checked:el.value;
+    });
+    saveState();toast('设置已保存');render();
+  };
+}
+
+/* ---------- 路由 ---------- */
+window.switchView=function(v){curView=v;curPeriod=null;render();};
+document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>switchView(a.dataset.view));
+window.addEventListener('resize',()=>{
+  if(['daily','weekly','monthly','yearly'].includes(curView)){
+    const list=periodsOf(curView);
+    if(curPeriod&&list.includes(curPeriod)){const rep=buildReport(curView,curPeriod);drawChart(rep);}
+  }
+});
+
+/* ---------- 自动同步：本地报告服务在线时，Excel 一变报告自动刷新 ---------- */
+function autoSyncNow(quiet){
+  if(!/^https?:$/.test(location.protocol))return;   // file:// 打开时无服务，静默跳过
+  fetch('/data.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+    if(!d||!d.rows||!d.rows.length)return;
+    if(!d.ok&&!d.updatedAt)return;                  // 服务端还没解析出任何数据
+    const serverAt=d.updatedAt||0;
+    if(serverAt<=+(state.dataUpdatedAt||0))return;  // 没有更新的数据
+    const prevLatest=state.rows.length?state.rows[state.rows.length-1].date:null;
+    state.rows=d.rows;state.columns=d.columns;
+    state.config=d.config||{};
+    for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
+    state.sourceName=d.sourceName||'营销发展日报.xlsx（自动同步）';
+    state.dataUpdatedAt=serverAt;
+    state.lastImportAt=(d.updatedHuman||new Date(serverAt).toLocaleString('zh-CN'))+'（自动）';
+    if(!chartMetric||!state.columns.includes(chartMetric))
+      chartMetric=state.columns.includes('总收入')?'总收入':state.columns[0];
+    const archived=autoArchiveNewDays(d.today||d2s(new Date()));
+    if(curPeriod&&curPeriod===prevLatest)curPeriod=null;  // 用户停在旧「最新一期」时跟随到最新
+    saveState();render();
+    const foot=$('#sideFoot');
+    if(foot)foot.innerHTML='🔄 自动同步已开启<br>表格更新后报告自动刷新';
+    if(archived.length)toast('已自动归档日报：'+archived.join('、'));
+    else if(!quiet)toast('数据已自动更新');
+  }).catch(()=>{});
+}
+function autoArchiveNewDays(todayStr){
+  // 首次同步只建立基线（历史日期不回溯归档）；之后每个「已成型的昨天及更早」的日期自动归档日报
+  if(!state.autoArchived){
+    state.autoArchived=state.rows.map(r=>r.date);
+    return [];
+  }
+  const known=new Set(state.autoArchived);
+  const archived=[];
+  for(const r of state.rows){
+    const k=r.date;
+    if(k>=todayStr)continue;          // 今天的数据还没定型，明天同步时再归档
+    if(known.has(k))continue;
+    const rep=buildReport('daily',k);
+    if(rep&&rep.hasData){addSnapshot(rep);archived.push(k);}
+    known.add(k);
+  }
+  state.autoArchived=[...known].sort().slice(-400);
+  if(archived.length)saveSnaps();
+  return archived;
+}
+setInterval(()=>autoSyncNow(false),30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoSyncNow(true);});
+
+loadAll();
+render();
+autoSyncNow(true);
+</script>
+</body>
+</html>
