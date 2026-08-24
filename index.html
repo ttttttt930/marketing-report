@@ -186,7 +186,7 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
 
 /* ---------- 全局状态 ---------- */
 const LS_DATA='reportHub.data.v1', LS_CFG='reportHub.cfg.v1', LS_SNAP='reportHub.snap.v1';
-let state={rows:[],columns:[],config:{},sourceName:''};
+let state={rows:[],columns:[],config:{},sourceName:'',targets:{}};
 let snapshots=[];
 let curView='daily';      // daily|weekly|monthly|yearly|archive|data
 let curPeriod=null;       // 当前报告期 key
@@ -544,7 +544,7 @@ function genDemo(){
 /* ---------- 持久化 ---------- */
 function saveState(){
   try{localStorage.setItem(LS_DATA,JSON.stringify({rows:state.rows,columns:state.columns,sourceName:state.sourceName,lastImportAt:state.lastImportAt||'',
-      dataUpdatedAt:state.dataUpdatedAt||0,autoArchived:state.autoArchived||null}));
+      dataUpdatedAt:state.dataUpdatedAt||0,autoArchived:state.autoArchived||null,targets:state.targets||{}}));
       localStorage.setItem(LS_CFG,JSON.stringify(state.config));}catch(e){}
 }
 function saveSnaps(){try{localStorage.setItem(LS_SNAP,JSON.stringify(snapshots));}catch(e){toast('归档存储空间不足');}}
@@ -555,7 +555,7 @@ function loadAll(){
     snapshots=JSON.parse(localStorage.getItem(LS_SNAP)||'[]');
     if(d&&d.rows&&d.rows.length){state.rows=d.rows;state.columns=d.columns;state.sourceName=d.sourceName;
       state.lastImportAt=d.lastImportAt||'';
-      state.dataUpdatedAt=d.dataUpdatedAt||0;state.autoArchived=d.autoArchived||null;
+      state.dataUpdatedAt=d.dataUpdatedAt||0;state.autoArchived=d.autoArchived||null;state.targets=d.targets||{};
       state.config=c||{};for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
       chartMetric=state.columns[0];return;}
   }catch(e){}
@@ -594,6 +594,66 @@ function periodTitle(type,key){
 }
 function prevKey(list,key){const i=list.indexOf(key);return i>0?list[i-1]:null;}
 function nextKey(list,key){const i=list.indexOf(key);return i>=0&&i<list.length-1?list[i+1]:null;}
+
+/* ---------- 目标达成 & 月度预测 ---------- */
+function monthProgress(monthKey,metric){
+  const rows=state.rows.filter(r=>r.date.slice(0,7)===monthKey);
+  if(!rows.length)return null;
+  const cumulative=aggRows(rows,metric);
+  const tgt=(state.targets[monthKey]||{})[metric];
+  const [y,m]=monthKey.split('-').map(Number);
+  const dim=new Date(y,m,0).getDate();
+  const latestDay=+rows[rows.length-1].date.slice(8,10);
+  const isCur=monthKey===d2s(new Date()).slice(0,7);
+  let forecast=cumulative,status='—';
+  if(isCur&&latestDay>0&&latestDay<dim){
+    forecast=(cumulative/latestDay)*dim;                 // 已过天数日均值外推到月底
+  }
+  const pace=tgt?cumulative/tgt:0;
+  if(tgt){
+    if(isCur&&latestDay<dim){
+      status=forecast>=tgt?'领先':forecast>=tgt*0.9?'持平':'落后';
+    }else{
+      status=cumulative>=tgt?'达成':'未达成';
+    }
+  }
+  return {cumulative,target:tgt,forecast,pace,status,latestDay,dim,isCur};
+}
+function targetCardHtml(monthKey){
+  const defaults=['净收入','总收入'].filter(c=>state.columns.includes(c));
+  const extra=Object.keys(state.targets[monthKey]||{}).filter(c=>!defaults.includes(c)&&state.columns.includes(c));
+  const metrics=defaults.concat(extra);
+  if(!metrics.length)return '';
+  let rowsHtml='';
+  for(const metric of metrics){
+    const p=monthProgress(monthKey,metric);
+    if(!p)continue;
+    const cfg=state.config[metric]||{name:metric,fmt:'cny'};
+    const pct=p.target?Math.min(100,p.pace*100):0;
+    const good=p.status==='领先'||p.status==='达成';
+    const barColor=!p.target?'#c9d1e3':(good?'#1e9e62':p.status==='持平'?'#c77c1a':'#d5384a');
+    const gap=p.target?p.forecast-p.target:0;
+    rowsHtml+=`<div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #f0f2f7">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <b style="font-size:13px">${esc(cfg.name||metric)}</b>
+        <span style="font-size:12px;color:var(--ink3)">目标 ¥ <input type="number" data-tgt-metric="${esc(metric)}" value="${p.target||''}" style="width:96px;border:1px solid var(--line);border-radius:6px;height:26px;padding:0 7px;font-size:12.5px;font-family:inherit" placeholder="未设"></span>
+      </div>
+      <div style="height:12px;background:#eef1f6;border-radius:7px;overflow:hidden">
+        <div style="width:${pct.toFixed(1)}%;height:100%;background:${barColor};transition:width .5s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:12.5px;color:var(--ink2)">
+        <span>累计 <b style="color:var(--ink)">${fmtVal(p.cumulative,'cny')}</b>${p.target?` <span style="color:var(--ink3)">/ ${fmtVal(p.target,'cny')} · ${pct.toFixed(0)}%</span>`:''}</span>
+        ${p.target?`<span>预测月底 <b style="color:${barColor}">${fmtVal(p.forecast,'cny')}</b> · <span style="color:${barColor};font-weight:600">${p.status}</span>${gap!==0?`（${gap>0?'超':'差'} ${fmtVal(Math.abs(gap),'cny')}）`:''}</span>`:''}
+      </div>
+    </div>`;
+  }
+  const p0=monthProgress(monthKey,metrics[0]);
+  return `<div class="card"><h3>🎯 目标达成 &amp; 月度预测 <span class="sub">${monthLabel(monthKey)}${p0&&p0.isCur?` · 已过 ${p0.latestDay}/${p0.dim} 天`:''}</span>
+    <div class="right"><button class="btn primary" id="saveTargetBtn">保存目标</button></div></h3>
+    ${rowsHtml}
+    <div class="hint">预测逻辑：本月"累计值 ÷ 已过天数 × 当月总天数"外推到月底。过去月份显示实际达成。目标只存在本机浏览器，可随时改。</div>
+  </div>`;
+}
 
 function buildReport(type,key){
   const list=periodsOf(type);
@@ -914,7 +974,27 @@ function renderReportView(c,snapshot){
       html+=card('当月净支出','月累计支出','总支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
   }
+  // 日报：本月目标进度卡（紧凑版，已设目标时显示）
+  if(type==='daily'&&!snapshot){
+    const tmon=rep.key.slice(0,7);
+    if(state.targets[tmon]&&Object.keys(state.targets[tmon]).length){
+      let pb='';
+      for(const metric of Object.keys(state.targets[tmon])){
+        if(!state.columns.includes(metric))continue;
+        const p=monthProgress(tmon,metric);if(!p)continue;
+        const cfg=state.config[metric]||{name:metric};
+        const pct=p.target?Math.min(100,p.pace*100):0;
+        const good=p.status==='领先'||p.status==='达成';
+        const col=!p.target?'#c9d1e3':(good?'#1e9e62':p.status==='持平'?'#c77c1a':'#d5384a');
+        pb+=`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>${esc(cfg.name)} 目标 ${fmtVal(p.target,'cny')}</span><span style="color:var(--ink2)">${pct.toFixed(0)}% · 预测 <b style="color:${col}">${fmtVal(p.forecast,'cny')}</b> <span style="color:${col};font-weight:600">${p.status}</span></span></div><div style="height:8px;background:#eef1f6;border-radius:5px;overflow:hidden"><div style="width:${pct.toFixed(1)}%;height:100%;background:${col};transition:width .5s"></div></div></div>`;
+      }
+      if(pb)html+=`<div class="kpi" style="grid-column:1/-1;background:linear-gradient(135deg,var(--card),rgba(79,110,247,.05))"><div class="name">🎯 月度目标进度 <span style="font-size:11px;color:var(--ink3)">${monthLabel(tmon)}</span> <span class="sub" style="margin-left:4px">月报页可设/改目标</span></div><div style="margin-top:8px">${pb}</div></div>`;
+    }
+  }
   html+='</div>';
+
+  // 月报：目标达成 & 月度预测卡
+  if(type==='monthly'&&!snapshot){html+=targetCardHtml(rep.key);}
 
   // 图表
   const metricOpts=state.columns.map(col=>{
@@ -986,6 +1066,15 @@ function renderReportView(c,snapshot){
   $('#printBtn').onclick=()=>window.print();
   const cms=$('#chartMetricSel');
   if(cms)cms.onchange=()=>{chartMetric=cms.value;drawChart(rep);};
+  const stb=$('#saveTargetBtn');
+  if(stb)stb.onclick=()=>{
+    if(!state.targets)state.targets={};
+    const obj=state.targets[rep.key]||{};
+    c.querySelectorAll('[data-tgt-metric]').forEach(inp=>{
+      const metric=inp.dataset.tgtMetric;const v=parseNum(inp.value);
+      if(v!=null&&v>0)obj[metric]=v;else delete obj[metric];});
+    state.targets[rep.key]=obj;saveState();toast('目标已保存');render();
+  };
 
   drawChart(rep);
 }
