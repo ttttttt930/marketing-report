@@ -448,17 +448,19 @@ function parseMarketingWorkbook(wb,today){
     }
   }
   if(!byDate.size)return null;
-  for(const row of byDate.values()){           // 派生指标：总退款 / 总销量
-    let rf=0,sl=0;
+  for(const row of byDate.values()){           // 派生指标：总退款 / 总销量 / 总推广支出
+    let rf=0,sl=0,pr=0;
     for(const k in row.values){
       if(k.endsWith('退款'))rf+=row.values[k];
       else if(k.endsWith('销量'))sl+=row.values[k];
+      else if(k.endsWith('推广支出'))pr+=row.values[k];
     }
     row.values['总退款']=Math.round(rf*100)/100;
     row.values['总销量']=sl;
+    row.values['总推广支出']=Math.round(pr*100)/100;
   }
-  allCols.add('总退款');allCols.add('总销量');
-  const core=['总收入','总支出','净收入','总退款','总销量'];
+  allCols.add('总退款');allCols.add('总销量');allCols.add('总推广支出');
+  const core=['总收入','总支出','总推广支出','净收入','总退款','总销量'];
   const chans=['淘宝','抖音','拼多多','小红书','tiktok'];
   const mets=['收入','退款','推广支出','净收入','销量'];
   const columns=core.filter(c=>allCols.has(c))
@@ -471,7 +473,7 @@ function importMarketingWorkbook(wb){
   if(!r)return false;
   state.rows=r.rows;state.columns=r.columns;
   state.config={};
-  const core=['总收入','总支出','净收入','总退款','总销量'];
+  const core=['总收入','总支出','总推广支出','净收入','总退款','总销量'];
   for(const col of r.columns){
     const cfg=guessCfg(col);cfg.core=core.includes(col);
     state.config[col]=cfg;
@@ -549,24 +551,32 @@ function saveState(){
 }
 function saveSnaps(){try{localStorage.setItem(LS_SNAP,JSON.stringify(snapshots));}catch(e){toast('归档存储空间不足');}}
 function loadAll(){
+  let d=null,c=null;
   try{
-    const d=JSON.parse(localStorage.getItem(LS_DATA)||'null');
-    const c=JSON.parse(localStorage.getItem(LS_CFG)||'null');
+    d=JSON.parse(localStorage.getItem(LS_DATA)||'null');
+    c=JSON.parse(localStorage.getItem(LS_CFG)||'null');
     snapshots=JSON.parse(localStorage.getItem(LS_SNAP)||'[]');
-    if(d&&d.rows&&d.rows.length){state.rows=d.rows;state.columns=d.columns;state.sourceName=d.sourceName;
+  }catch(e){}
+  const emb=window.EMBEDDED_DATA;
+  // 线上版：内嵌数据（每日自动重新生成）比本机存储新时，采用内嵌数据，但保留目标 / 归档基线
+  if(emb&&emb.rows&&emb.rows.length&&(!d||!d.rows||!d.rows.length||(emb.updatedAt||0)>(d.dataUpdatedAt||0))){
+    state.rows=emb.rows;state.columns=emb.columns;
+    state.sourceName=emb.sourceName||'营销发展日报';
+    state.config=emb.config||{};
+    for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
+    state.targets=(d&&d.targets)||{};
+    state.autoArchived=(d&&d.autoArchived)||null;
+    state.lastImportAt=(emb.updatedAt?new Date(emb.updatedAt).toLocaleString('zh-CN')+'（自动）':'');
+    state.dataUpdatedAt=emb.updatedAt||0;
+    chartMetric=state.columns.includes('总收入')?'总收入':state.columns[0];
+    saveState();
+    return;
+  }
+  if(d&&d.rows&&d.rows.length){state.rows=d.rows;state.columns=d.columns;state.sourceName=d.sourceName;
       state.lastImportAt=d.lastImportAt||'';
       state.dataUpdatedAt=d.dataUpdatedAt||0;state.autoArchived=d.autoArchived||null;state.targets=d.targets||{};
       state.config=c||{};for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
       chartMetric=state.columns[0];return;}
-  }catch(e){}
-  if(window.EMBEDDED_DATA&&window.EMBEDDED_DATA.rows&&window.EMBEDDED_DATA.rows.length){
-    const d=window.EMBEDDED_DATA;
-    state.rows=d.rows;state.columns=d.columns;state.sourceName=d.sourceName||'营销发展日报';
-    state.config=d.config||{};state.lastImportAt='';
-    for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
-    chartMetric=state.columns.includes('总收入')?'总收入':state.columns[0];
-    return;
-  }
   genDemo();saveState();
 }
 
@@ -972,6 +982,10 @@ function renderReportView(c,snapshot){
     if(state.columns.includes('总支出')){
       const mo=accum('总支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
       html+=card('当月净支出','月累计支出','总支出',mo.cur,mo.prev,true,'上月同期无数据');
+    }
+    if(state.columns.includes('总推广支出')){
+      const mo=accum('总推广支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
+      html+=card('当月推广支出','月累计推广','总推广支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
   }
   // 日报：本月目标进度卡（紧凑版，已设目标时显示）
