@@ -1223,6 +1223,18 @@ function renderDataMgr(c){
       </div>
     </div>
   </div>
+  <div class="card"><h3>✏️ 数据编辑 <span class="sub">直接增删改 SQLite 数据库</span></h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <input type="date" id="editDate" style="border:1px solid var(--line);border-radius:8px;height:32px;padding:0 10px;font-size:13px;font-family:inherit">
+      <button class="btn" id="loadDayBtn">载入当天</button>
+      <button class="btn" id="newDayBtn">新增（清空）</button>
+      <button class="btn primary" id="saveDayBtn">💾 保存到数据库</button>
+      <button class="btn danger" id="delDayBtn">删除当天</button>
+      <button class="btn" id="syncNowBtn">🔄 从 Excel 立即同步</button>
+    </div>
+    <div id="editGrid" class="hint" style="margin:0">先选日期点「载入当天」，或直接选新日期点「新增（清空）」。</div>
+    <div class="hint" style="margin-top:10px">保存直接写入 SQLite 数据库（<b>${esc(state.sourceName||'')}</b>），报告约 3 秒内自动刷新。同一天只覆盖填了值的指标。线上 GitHub Pages 版为每日只读快照。</div>
+  </div>
   <div class="card"><h3>ℹ️ 当前数据</h3>${infoHtml}</div>
   <div class="card"><h3>⚙️ 指标设置 <span class="sub">影响聚合方式、显示格式与涨跌好坏判断</span></h3>
     ${state.columns.length?`<div style="overflow-x:auto"><table class="plain">
@@ -1273,6 +1285,68 @@ function renderDataMgr(c){
           if(d&&d.ok){toast('已切换数据源：'+(d.sourceFile||d.excelPath)+(d.days?'（'+d.days+' 天）':''));refreshSrcInfo();autoSyncNow(true);}
           else toast('切换失败：'+((d&&d.error)||'未知错误'));
         }).catch(()=>{srcBtn.disabled=false;srcBtn.textContent='保存并切换';toast('本地服务未响应');});
+    };
+  }
+  /* ---------- 数据编辑（SQLite CRUD，需本地服务） ---------- */
+  const edDate=$('#editDate'),edGrid=$('#editGrid');
+  const isServed=/^https?:$/.test(location.protocol);
+  if(edDate&&state.rows.length)edDate.value=state.rows[state.rows.length-1].date;
+  function renderEditGrid(values){
+    if(!state.columns.length){edGrid.innerHTML='暂无指标，先导入数据。';return;}
+    let h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 14px">';
+    for(const col of state.columns){
+      const v=values&&values[col]!==undefined&&values[col]!==null?values[col]:'';
+      h+=`<label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink2)">
+        <span>${esc(col)}</span>
+        <input type="number" step="any" data-edit="${esc(col)}" value="${v}" placeholder="—"
+          style="border:1px solid var(--line);border-radius:7px;height:30px;padding:0 8px;font-size:13px;font-family:inherit"></label>`;
+    }
+    edGrid.innerHTML=h+'</div>';
+  }
+  if(!isServed){
+    if(edGrid)edGrid.innerHTML='数据编辑需要本地服务运行（数据库直连）。线上版为只读快照，编辑请用本地版。';
+    ['loadDayBtn','newDayBtn','saveDayBtn','delDayBtn','syncNowBtn'].forEach(id=>{const b=$('#'+id);if(b)b.disabled=true;});
+  }else{
+    const loadDay=$('#loadDayBtn'),newDay=$('#newDayBtn'),saveDay=$('#saveDayBtn'),delDay=$('#delDayBtn'),syncNow=$('#syncNowBtn');
+    loadDay.onclick=()=>{
+      if(!edDate.value){toast('请先选择日期');return;}
+      fetch('/api/rows/'+edDate.value,{cache:'no-store'}).then(r=>r.json()).then(d=>{
+        renderEditGrid(d&&d.ok?d.row.values:null);
+        toast(d&&d.ok?'已载入 '+edDate.value+' 的数据':'该日期暂无数据（可当作新增日填写）');
+      }).catch(()=>toast('本地服务未响应'));
+    };
+    newDay.onclick=()=>{renderEditGrid(null);toast('已清空，填写后点「保存到数据库」新增这一天');};
+    saveDay.onclick=()=>{
+      if(!edDate.value){toast('请先选择日期');return;}
+      const values={};let n=0;
+      edGrid.querySelectorAll('[data-edit]').forEach(inp=>{
+        if(inp.value!==''){values[inp.dataset.edit]=Number(inp.value);n++;}
+      });
+      if(!n){toast('请至少填写一个指标数值');return;}
+      saveDay.disabled=true;saveDay.textContent='保存中…';
+      fetch('/api/rows/'+edDate.value,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})})
+        .then(r=>r.json()).then(d=>{
+          saveDay.disabled=false;saveDay.textContent='💾 保存到数据库';
+          if(d&&d.ok){toast('已保存 '+edDate.value+'（'+n+' 项指标）→ SQLite');autoSyncNow(true);}
+          else toast('保存失败：'+((d&&d.error)||'未知错误'));
+        }).catch(()=>{saveDay.disabled=false;saveDay.textContent='💾 保存到数据库';toast('本地服务未响应');});
+    };
+    delDay.onclick=()=>{
+      if(!edDate.value){toast('请先选择日期');return;}
+      if(!confirm('确定删除 '+edDate.value+' 这一天的全部数据？此操作不可恢复。'))return;
+      fetch('/api/rows/'+edDate.value,{method:'DELETE'})
+        .then(r=>r.json()).then(d=>{
+          if(d&&d.ok){toast('已删除 '+edDate.value);renderEditGrid(null);autoSyncNow(true);}
+          else toast('删除失败：'+((d&&d.error)||'未知错误'));
+        }).catch(()=>toast('本地服务未响应'));
+    };
+    syncNow.onclick=()=>{
+      syncNow.disabled=true;syncNow.textContent='同步中…';
+      fetch('/api/sync',{method:'POST'}).then(r=>r.json()).then(d=>{
+        syncNow.disabled=false;syncNow.textContent='🔄 从 Excel 立即同步';
+        if(d&&d.ok){toast('Excel → 数据库同步完成：'+d.days+' 天');autoSyncNow(true);}
+        else toast('同步失败：'+((d&&d.error)||'未知错误'));
+      }).catch(()=>{syncNow.disabled=false;syncNow.textContent='🔄 从 Excel 立即同步';toast('本地服务未响应');});
     };
   }
   const scb=$('#saveCfgBtn');
