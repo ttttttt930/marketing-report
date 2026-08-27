@@ -187,6 +187,9 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
 /* ---------- 全局状态 ---------- */
 const LS_DATA='reportHub.data.v1', LS_CFG='reportHub.cfg.v1', LS_SNAP='reportHub.snap.v1';
 let state={rows:[],columns:[],config:{},sourceName:'',targets:{}};
+/* 显示名映射（财务报表风）：只改界面文案，不改数据列名/数据库字段 */
+const DISP_NAMES={'总收入':'营业收入','总支出':'营业成本','净收入':'净利润','总退款':'销售退回','总推广支出':'营销费用','总销量':'销量'};
+function dispName(col){return DISP_NAMES[col]||((state.config[col]||{}).name)||col;}
 let snapshots=[];
 let curView='daily';      // daily|weekly|monthly|yearly|archive|data
 let curPeriod=null;       // 当前报告期 key
@@ -645,7 +648,7 @@ function targetCardHtml(monthKey){
     const gap=p.target?p.forecast-p.target:0;
     rowsHtml+=`<div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #f0f2f7">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <b style="font-size:13px">${esc(cfg.name||metric)}</b>
+        <b style="font-size:13px">${esc(dispName(metric))}</b>
         <span style="font-size:12px;color:var(--ink3)">目标 ¥ <input type="number" data-tgt-metric="${esc(metric)}" value="${p.target||''}" style="width:96px;border:1px solid var(--line);border-radius:6px;height:26px;padding:0 7px;font-size:12.5px;font-family:inherit" placeholder="未设"></span>
       </div>
       <div style="height:12px;background:#eef1f6;border-radius:7px;overflow:hidden">
@@ -679,7 +682,7 @@ function buildReport(type,key){
     const cur=aggRows(curRows,col), prev=aggRows(prevRows,col);
     let delta=null;
     if(cur!=null&&prev!=null&&prev!==0)delta=(cur-prev)/Math.abs(prev)*100;
-    return {col,name:cfg.name||col,cur,prev,delta,fmt:cfg.fmt,invert:!!cfg.invert,color:COLORS[i%COLORS.length]};
+    return {col,name:dispName(col),cur,prev,delta,fmt:cfg.fmt,invert:!!cfg.invert,color:COLORS[i%COLORS.length]};
   });
 
   // 年报：按月展开（1-12 月 + 全年汇总行），图表用月维度、明细正序
@@ -738,13 +741,13 @@ function buildSummary(type,key,kpis,list,groups,chartKeys){
   const ni=gcol('净收入'),te=gcol('总支出'),rv=gcol('总收入');
   if(ni&&te&&ni.cur!=null&&te.cur!=null&&te.cur!==0){
     const roas=ni.cur/te.cur;
-    let line=`投产比（净收入/支出）为 <b>${(roas*100).toFixed(0)}%</b>`;
+    let line=`投入产出比（净利润/营业成本）为 <b>${(roas*100).toFixed(0)}%</b>`;
     if(ni.prev!=null&&te.prev!=null&&te.prev!==0){
       const proas=ni.prev/te.prev,dr=(roas-proas)/Math.abs(proas)*100,good=dr>0;
-      line+=`，较上期${good?'提升':'下降'} <b>${Math.abs(dr).toFixed(1)}%</b>（上期 ${(proas*100).toFixed(0)}%），<span class="${good?'neg':'pos'}">${good?'投产效率改善':'投产效率下滑，多花钱未换来等比例收入'}</span>`;
+      line+=`，较上期${good?'提升':'下降'} <b>${Math.abs(dr).toFixed(1)}%</b>（上期 ${(proas*100).toFixed(0)}%），<span class="${good?'neg':'pos'}">${good?'投入产出效率改善':'投入产出效率下滑，费用增加未换来等比例收入'}</span>`;
     }
     if(rv&&rv.cur!=null&&rv.cur!==0){
-      line+=`；总推广投产比（收入/支出）<b>${(rv.cur/te.cur*100).toFixed(0)}%</b>`;
+      line+=`；总推广投入产出比（营业收入/营业成本）<b>${(rv.cur/te.cur*100).toFixed(0)}%</b>`;
     }
     parts.push(line+'。');
   }
@@ -972,20 +975,20 @@ function renderReportView(c,snapshot){
     if(state.columns.includes('净收入')){
       const wk=accum('净收入',ws,rep.key,addDays(ws,-7),addDays(rep.key,-7));
       const mo=accum('净收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当周净收入','本周累计','净收入',wk.cur,wk.prev,false,'上周同期无数据');
-      html+=card('当月净收入','月累计','净收入',mo.cur,mo.prev,false,'上月同期无数据');
+      html+=card('当周净利润','本周累计','净收入',wk.cur,wk.prev,false,'上周同期无数据');
+      html+=card('当月净利润','月累计','净收入',mo.cur,mo.prev,false,'上月同期无数据');
     }
     if(state.columns.includes('总收入')){
       const mo=accum('总收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当月总收入','月累计','总收入',mo.cur,mo.prev,false,'上月同期无数据');
+      html+=card('当月营业收入','月累计','总收入',mo.cur,mo.prev,false,'上月同期无数据');
     }
     if(state.columns.includes('总支出')){
       const mo=accum('总支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当月净支出','月累计支出','总支出',mo.cur,mo.prev,true,'上月同期无数据');
+      html+=card('当月营业成本','月累计成本','总支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
     if(state.columns.includes('总推广支出')){
       const mo=accum('总推广支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当月推广支出','月累计推广','总推广支出',mo.cur,mo.prev,true,'上月同期无数据');
+      html+=card('当月营销费用','月累计费用','总推广支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
   }
   // 日报：本月目标进度卡（紧凑版，已设目标时显示）
@@ -1000,7 +1003,7 @@ function renderReportView(c,snapshot){
         const pct=p.target?Math.min(100,p.pace*100):0;
         const good=p.status==='领先'||p.status==='达成';
         const col=!p.target?'#c9d1e3':(good?'#1e9e62':p.status==='持平'?'#c77c1a':'#d5384a');
-        pb+=`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>${esc(cfg.name)} 目标 ${fmtVal(p.target,'cny')}</span><span style="color:var(--ink2)">${pct.toFixed(0)}% · 预测 <b style="color:${col}">${fmtVal(p.forecast,'cny')}</b> <span style="color:${col};font-weight:600">${p.status}</span></span></div><div style="height:8px;background:#eef1f6;border-radius:5px;overflow:hidden"><div style="width:${pct.toFixed(1)}%;height:100%;background:${col};transition:width .5s"></div></div></div>`;
+        pb+=`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>${esc(dispName(metric))} 目标 ${fmtVal(p.target,'cny')}</span><span style="color:var(--ink2)">${pct.toFixed(0)}% · 预测 <b style="color:${col}">${fmtVal(p.forecast,'cny')}</b> <span style="color:${col};font-weight:600">${p.status}</span></span></div><div style="height:8px;background:#eef1f6;border-radius:5px;overflow:hidden"><div style="width:${pct.toFixed(1)}%;height:100%;background:${col};transition:width .5s"></div></div></div>`;
       }
       if(pb)html+=`<div class="kpi" style="grid-column:1/-1;background:linear-gradient(135deg,var(--card),rgba(79,110,247,.05))"><div class="name">🎯 月度目标进度 <span style="font-size:11px;color:var(--ink3)">${monthLabel(tmon)}</span> <span class="sub" style="margin-left:4px">月报页可设/改目标</span></div><div style="margin-top:8px">${pb}</div></div>`;
     }
@@ -1012,7 +1015,7 @@ function renderReportView(c,snapshot){
 
   // 图表
   const metricOpts=state.columns.map(col=>{
-    const nm=(state.config[col]||{}).name||col;
+    const nm=dispName(col);
     return `<option value="${esc(col)}" ${col===chartMetric?'selected':''}>${esc(nm)}</option>`;}).join('');
   html+=`<div class="card">
     <h3>趋势 <span class="sub">近 ${rep.chartLabels.length} 期</span>
