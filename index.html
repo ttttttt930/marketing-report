@@ -188,7 +188,7 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
 const LS_DATA='reportHub.data.v1', LS_CFG='reportHub.cfg.v1', LS_SNAP='reportHub.snap.v1';
 let state={rows:[],columns:[],config:{},sourceName:'',targets:{}};
 /* 显示名映射（财务报表风）：只改界面文案，不改数据列名/数据库字段 */
-const DISP_NAMES={'总收入':'营业收入','总支出':'营业成本','净收入':'净利润','总退款':'销售退回','总推广支出':'营销费用','总销量':'销量'};
+const DISP_NAMES={'总收入':'总成交额(GMV)','总支出':'总消耗','净收入':'净回款','总退款':'退款金额','总推广支出':'推广消耗','总销量':'销量'};
 function dispName(col){return DISP_NAMES[col]||((state.config[col]||{}).name)||col;}
 let snapshots=[];
 let curView='daily';      // daily|weekly|monthly|yearly|archive|data
@@ -741,13 +741,13 @@ function buildSummary(type,key,kpis,list,groups,chartKeys){
   const ni=gcol('净收入'),te=gcol('总支出'),rv=gcol('总收入');
   if(ni&&te&&ni.cur!=null&&te.cur!=null&&te.cur!==0){
     const roas=ni.cur/te.cur;
-    let line=`投入产出比（净利润/营业成本）为 <b>${(roas*100).toFixed(0)}%</b>`;
+    let line=`ROI（净回款/总消耗）为 <b>${(roas*100).toFixed(0)}%</b>`;
     if(ni.prev!=null&&te.prev!=null&&te.prev!==0){
       const proas=ni.prev/te.prev,dr=(roas-proas)/Math.abs(proas)*100,good=dr>0;
-      line+=`，较上期${good?'提升':'下降'} <b>${Math.abs(dr).toFixed(1)}%</b>（上期 ${(proas*100).toFixed(0)}%），<span class="${good?'neg':'pos'}">${good?'投入产出效率改善':'投入产出效率下滑，费用增加未换来等比例收入'}</span>`;
+      line+=`，较上期${good?'提升':'下降'} <b>${Math.abs(dr).toFixed(1)}%</b>（上期 ${(proas*100).toFixed(0)}%），<span class="${good?'neg':'pos'}">${good?'ROI 改善':'ROI 下滑，消耗增加未换来等比例回款'}</span>`;
     }
     if(rv&&rv.cur!=null&&rv.cur!==0){
-      line+=`；总推广投入产出比（营业收入/营业成本）<b>${(rv.cur/te.cur*100).toFixed(0)}%</b>`;
+      line+=`；推广 ROI（GMV/总消耗）<b>${(rv.cur/te.cur*100).toFixed(0)}%</b>`;
     }
     parts.push(line+'。');
   }
@@ -975,20 +975,20 @@ function renderReportView(c,snapshot){
     if(state.columns.includes('净收入')){
       const wk=accum('净收入',ws,rep.key,addDays(ws,-7),addDays(rep.key,-7));
       const mo=accum('净收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当周净利润','本周累计','净收入',wk.cur,wk.prev,false,'上周同期无数据');
-      html+=card('当月净利润','月累计','净收入',mo.cur,mo.prev,false,'上月同期无数据');
+      html+=card('当周净回款','本周累计','净收入',wk.cur,wk.prev,false,'上周同期无数据');
+      html+=card('当月净回款','月累计','净收入',mo.cur,mo.prev,false,'上月同期无数据');
     }
     if(state.columns.includes('总收入')){
       const mo=accum('总收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当月营业收入','月累计','总收入',mo.cur,mo.prev,false,'上月同期无数据');
+      html+=card('当月总成交额(GMV)','月累计','总收入',mo.cur,mo.prev,false,'上月同期无数据');
     }
     if(state.columns.includes('总支出')){
       const mo=accum('总支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当月营业成本','月累计成本','总支出',mo.cur,mo.prev,true,'上月同期无数据');
+      html+=card('当月总消耗','月累计消耗','总支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
     if(state.columns.includes('总推广支出')){
       const mo=accum('总推广支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('当月营销费用','月累计费用','总推广支出',mo.cur,mo.prev,true,'上月同期无数据');
+      html+=card('当月推广消耗','月累计推广','总推广支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
   }
   // 日报：本月目标进度卡（紧凑版，已设目标时显示）
