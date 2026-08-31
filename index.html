@@ -68,16 +68,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans G
 .card h3 .sub{font-weight:400;font-size:12px;color:var(--ink3)}
 .card h3 .right{margin-left:auto;display:flex;gap:8px;align-items:center}
 
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
-  padding:14px 16px}
-.kpi .name{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;align-items:center}
-.kpi .val{font-size:23px;font-weight:700;margin:6px 0 8px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
-.kpi .delta{font-size:12px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px}
-.kpi .delta.up{color:var(--up);background:#fdeef0}
-.kpi .delta.down{color:var(--down);background:#e9f7f0}
-.kpi .delta.flat{color:var(--ink3);background:#f1f3f8}
-.kpi .cmp{font-size:11px;color:var(--ink3);margin-top:6px}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:920px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.kpi-grid{grid-template-columns:1fr}}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  padding:18px 20px;position:relative;transition:transform .15s,box-shadow .15s}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(23,32,64,.08)}
+.kpi .kpi-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.kpi .kpi-emoji{font-size:22px;line-height:1}
+.kpi .kpi-trend{font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+.kpi .kpi-trend.up{color:var(--up)}
+.kpi .kpi-trend.down{color:var(--down)}
+.kpi .kpi-trend.flat{color:var(--ink3)}
+.kpi .val{font-size:28px;font-weight:700;margin:6px 0 4px;letter-spacing:-.8px;font-variant-numeric:tabular-nums;line-height:1.2}
+.kpi .kpi-name{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px}
+.kpi .kpi-desc{font-size:11.5px;color:var(--ink3);line-height:1.5}
+.kpi .cmp{font-size:11px;color:var(--ink3);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 
 .chart-box{width:100%;position:relative}
 .chart-box svg{display:block;width:100%}
@@ -189,7 +195,8 @@ const LS_DATA='reportHub.data.v1', LS_CFG='reportHub.cfg.v1', LS_SNAP='reportHub
 let state={rows:[],columns:[],config:{},sourceName:'',targets:{}};
 /* 显示名映射（财务报表风）：只改界面文案，不改数据列名/数据库字段 */
 const DISP_NAMES={'总收入':'GMV','总支出':'总消耗','净收入':'净利','总退款':'退款','总推广支出':'推广消耗','总销量':'销量(件)'};
-function dispName(col){return DISP_NAMES[col]||((state.config[col]||{}).name)||col;}
+const KPI_EMOJIS={'总收入':'💰','总支出':'📉','净收入':'✨','总退款':'🔄','总推广支出':'🚀','总销量':'📦'};
+const KPI_DESC={'总收入':'成交总额 Gross Merchandise Volume，全渠道成交额汇总','总支出':'营销总花费 = 推广消耗 + 退款金额','净收入':'GMV 扣除推广和退款后的实际利润','总退款':'全渠道退款订单金额合计','总推广支出':'各平台广告投放总花费','总销量':'成交订单总件数'};
 let snapshots=[];
 let curView='daily';      // daily|weekly|monthly|yearly|archive|data
 let curPeriod=null;       // 当前报告期 key
@@ -926,34 +933,85 @@ function renderReportView(c,snapshot){
     `<div class="period-nav no-print"><button class="btn" id="backArc">← 返回归档列表</button>
      <div class="spacer"></div><span style="font-size:12px;color:var(--ink3)">归档于 ${snapshot.createdAt}</span>
      <button class="btn" id="printBtn">🖨️ 打印 / 导出 PDF</button></div>`:
-    periodNavHtml(type,rep.key);
+    periodNavHtml(type,rep.key)+
+    `<div style="display:flex;justify-content:space-between;align-items:center;margin:2px 0 14px;font-size:12.5px;color:var(--ink2)">
+      <div class="period-tabs" style="display:flex;gap:2px">
+        ${['daily','weekly','monthly','yearly'].map(t=>`<span style="padding:4px 12px;border-radius:6px;font-size:13px;cursor:pointer;${t===type?'background:var(--accent-weak);color:var(--accent);font-weight:600':'color:var(--ink3)'}">${{daily:'日报',weekly:'周报',monthly:'月报',yearly:'年报'}[t]}</span>`).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span>当前周期 <b style="color:var(--ink)">${esc(rep.title)}</b></span>
+        <span style="color:var(--ink3)">·</span>
+        <span>环比基准 <b style="color:var(--ink)">${esc(rep.prevTitle)}</b></span>
+      </div>
+    </div>`;
 
   const typeName={daily:'日报',weekly:'周报',monthly:'月报',yearly:'年报'}[type]||'报告';
-  html+=`<div style="margin:2px 0 14px">
-    <div style="font-size:20px;font-weight:700">${typeName} · ${esc(rep.title)}</div>
-    <div style="font-size:12px;color:var(--ink3);margin-top:4px">
-      数据源：${esc(state.sourceName||'-')} · 覆盖 ${rep.rowsN} 条记录 · 环比基准：${esc(rep.prevTitle)}</div></div>`;
+  // 数据范围
+  const sortedRows=[...state.rows].sort((a,b)=>a.date.localeCompare(b.date));
+  const firstDay=sortedRows.length?sortedRows[0].date.slice(0,7).replace('-','-').slice(0,4)+'-'+sortedRows[0].date.slice(5,7):'';
+  const lastDay=sortedRows.length?sortedRows[sortedRows.length-1].date.slice(0,7).replace('-','-').slice(0,4)+'-'+sortedRows[sortedRows.length-1].date.slice(5,7):'';
+  const dataRange=(firstDay&&lastDay)?(firstDay===lastDay?firstDay:firstDay+' ~ '+lastDay):'—';
+  const updatedAt=state.rows.length?sortedRows[sortedRows.length-1].date.replace(/-/g,'/'):'—';
+  // 渠道列表
+  const channels=Array.from(new Set(state.columns.filter(c=>!['总收入','总支出','净收入','总退款','总推广支出','总销量'].includes(c)).map(c=>c.replace(/(收入|退款|推广支出|净收入|销量)$/,'')))).filter(c=>c);
+  const channelTxt=channels.length?channels.join(' / '):'—';
+  const totalDays=state.rows.length;
+  const totalMetrics=state.columns.length;
 
-  // KPI
-  const grpHead=t=>`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:4px 0 -4px;font-size:12.5px;font-weight:700;color:var(--ink2)"><span style="display:inline-block;width:4px;height:14px;border-radius:2px;background:linear-gradient(180deg,#4a6cf7,#2e66b1)"></span>${t}</div>`;
+  // 页面标题区（飞书风格）
+  html+=`<div style="margin:0 0 18px">
+    <div style="font-size:24px;font-weight:700;letter-spacing:-.3px">时间法则营销数据总览</div>
+    <div style="font-size:13px;color:var(--ink3);margin-top:6px;line-height:1.6">
+      时间法则多周期营销数据看板：核心指标、渠道投放、趋势分析与 AI 洞察一站式查看</div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;background:#fff4e6;color:#c77c1a;font-size:12px;font-weight:600;border:1px solid #fde0b8">📋 真实数据快照</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;background:#f4f6fb;color:var(--ink2);font-size:12px;border:1px solid var(--line)">${totalDays} 天</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;background:#f4f6fb;color:var(--ink2);font-size:12px;border:1px solid var(--line)">${totalMetrics} 项指标</span>
+    </div>
+  </div>`;
+
+  // 数据快照卡
+  html+=`<div class="card" style="padding:16px 20px;margin-bottom:14px">
+    <div style="font-size:13.5px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">📋</span>数据快照
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 40px;font-size:12.5px;color:var(--ink2)">
+      <div><span style="color:var(--ink3)">来源：</span>营销发展日报（应用数据库）</div>
+      <div style="text-align:right"><span style="color:var(--ink3)">更新时间</span> <span style="font-weight:600;color:var(--ink)">${updatedAt}</span></div>
+      <div><span style="color:var(--ink3)">覆盖周期</span> <span style="font-weight:600;color:var(--ink)">${dataRange}</span></div>
+      <div style="text-align:right"><span style="color:var(--ink3)">覆盖渠道</span> <span style="font-weight:600;color:var(--ink)">${channelTxt}</span></div>
+    </div>
+  </div>`;
+
+  // KPI 卡片（新布局：emoji+趋势右上→大数字→指标名→描述→上期）
   html+='<div class="kpi-grid">';
-  if(type==='daily'&&!snapshot)html+=grpHead('当日');
   for(const k of rep.kpis){
-    let deltaHtml='<span class="delta flat">— 无上期数据</span>';
+    const emoji=KPI_EMOJIS[k.col]||'📊';
+    const desc=KPI_DESC[k.col]||'';
+    let trendHtml='';
     if(k.delta!=null){
       const up=k.delta>0;
       const cls=Math.abs(k.delta)<0.5?'flat':(up?'up':'down');
-      const arrow=Math.abs(k.delta)<0.5?'≈':(up?'▲':'▼');
-      const colorCls=k.invert?(up?'d-down':'d-up'):(up?'d-up':'d-down');
-      deltaHtml=`<span class="delta ${cls}">${arrow} ${Math.abs(k.delta).toFixed(1)}%</span>`;
-      deltaHtml+=`<div class="cmp" style="color:var(--${colorCls==='d-up'?'up':'down'})">上期 ${fmtVal(k.prev,k.fmt)}</div>`;
-    }else if(k.prev==null&&k.cur!=null){deltaHtml='<span class="delta flat">— 首期</span>';}
-      html+=`<div class="kpi"><div class="name">${esc(k.name)}</div>
-      <div class="val">${k.cur==null?'—':fmtVal(k.cur,k.fmt)}</div>${deltaHtml}</div>`;
+      const arrow=Math.abs(k.delta)<0.5?'≈':(up?'↑':'↓');
+      trendHtml=`<span class="kpi-trend ${cls}">${arrow} ${Math.abs(k.delta).toFixed(1)}%</span>`;
+    }
+    let cmpHtml='';
+    if(k.prev!=null){
+      cmpHtml=`<div class="cmp">上期 ${fmtVal(k.prev,k.fmt)}</div>`;
+    }
+    html+=`<div class="kpi">
+      <div class="kpi-header">
+        <span class="kpi-emoji">${emoji}</span>
+        ${trendHtml}
+      </div>
+      <div class="val">${k.cur==null?'—':fmtVal(k.cur,k.fmt)}</div>
+      <div class="kpi-name">${esc(k.name)}</div>
+      <div class="kpi-desc">${esc(desc)}</div>
+      ${cmpHtml}
+    </div>`;
   }
   // 日报附加卡：本周/本月累计（累计至所选日，环比上期同期）
   if(type==='daily'&&!snapshot){
-    html+=grpHead('本周 / 本月累计');
     const mk=rep.key.slice(0,7), day=+rep.key.slice(8,10);
     const y=+mk.slice(0,4), m=+mk.slice(5,7);
     const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
@@ -964,34 +1022,41 @@ function renderReportView(c,snapshot){
     const accum=(col,from,to,prevFrom,prevTo)=>({
       cur:aggRows(state.rows.filter(r=>r.date>=from&&r.date<=to),col),
       prev:aggRows(state.rows.filter(r=>r.date>=prevFrom&&r.date<=prevTo),col)});
-    const card=(label,sub,col,cur,prev,invert,noPrevTxt)=>{
-      let deltaHtml=`<span class="delta flat">— ${noPrevTxt}</span>`;
+    const accumCard=(label,sub,col,cur,prev,invert,noPrevTxt)=>{
+      let trendHtml='', cmpHtml='';
       if(cur!=null&&prev!=null&&prev!==0){
         const dd=(cur-prev)/Math.abs(prev)*100, up=dd>0;
-        const good=invert?!up:up;                                       // invert：支出下降为好
-        deltaHtml=`<span class="delta ${Math.abs(dd)<0.5?'flat':(up?'up':'down')}">${Math.abs(dd)<0.5?'≈':(up?'▲':'▼')} ${Math.abs(dd).toFixed(1)}%</span>`+
-          `<div class="cmp" style="color:var(--${good?'up':'down'})">上期同期 ${fmtVal(prev,'cny')}</div>`;
-      }else if(cur!=null&&prev==null){deltaHtml='<span class="delta flat">— 首期</span>';}
-      return `<div class="kpi" style="background:linear-gradient(135deg,var(--card),rgba(46,102,177,.06))"><div class="name">${label} <span style="font-size:11px;color:var(--ink3)">${sub}</span></div>
-      <div class="val">${cur==null?'—':fmtVal(cur,'cny')}</div>${deltaHtml}</div>`;
+        const cls=Math.abs(dd)<0.5?'flat':(up?'up':'down');
+        const arrow=Math.abs(dd)<0.5?'≈':(up?'↑':'↓');
+        trendHtml=`<span class="kpi-trend ${cls}">${arrow} ${Math.abs(dd).toFixed(1)}%</span>`;
+        cmpHtml=`<div class="cmp">上期同期 ${fmtVal(prev,'cny')}</div>`;
+      }else if(cur!=null&&prev==null){cmpHtml=`<div class="cmp">— ${noPrevTxt}</div>`;}
+      else if(cur!=null){cmpHtml=`<div class="cmp">— ${noPrevTxt}</div>`;}
+      return `<div class="kpi">
+        <div class="kpi-header"><span class="kpi-emoji">📊</span>${trendHtml}</div>
+        <div class="val">${cur==null?'—':fmtVal(cur,'cny')}</div>
+        <div class="kpi-name">${esc(label)}</div>
+        <div class="kpi-desc">${esc(sub||'')}</div>
+        ${cmpHtml}
+      </div>`;
     };
     if(state.columns.includes('净收入')){
       const wk=accum('净收入',ws,rep.key,addDays(ws,-7),addDays(rep.key,-7));
       const mo=accum('净收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('本周净利','','净收入',wk.cur,wk.prev,false,'上周同期无数据');
-      html+=card('本月净利','','净收入',mo.cur,mo.prev,false,'上月同期无数据');
+      html+=accumCard('本周净利','本周累计净利润','净收入',wk.cur,wk.prev,false,'上周同期无数据');
+      html+=accumCard('本月净利','本月累计净利润','净收入',mo.cur,mo.prev,false,'上月同期无数据');
     }
     if(state.columns.includes('总收入')){
       const mo=accum('总收入',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('本月GMV','','总收入',mo.cur,mo.prev,false,'上月同期无数据');
+      html+=accumCard('本月GMV','本月累计成交总额','总收入',mo.cur,mo.prev,false,'上月同期无数据');
     }
     if(state.columns.includes('总支出')){
       const mo=accum('总支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('本月总消耗','推广+退款','总支出',mo.cur,mo.prev,true,'上月同期无数据');
+      html+=accumCard('本月总消耗','推广+退款','总支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
     if(state.columns.includes('总推广支出')){
       const mo=accum('总推广支出',mk+'-01',rep.key,pm+'-01',prevMonthEnd);
-      html+=card('本月推广消耗','','总推广支出',mo.cur,mo.prev,true,'上月同期无数据');
+      html+=accumCard('本月推广消耗','各平台广告投放，本月累计','总推广支出',mo.cur,mo.prev,true,'上月同期无数据');
     }
   }
   // 日报：本月目标进度卡（紧凑版，已设目标时显示）
