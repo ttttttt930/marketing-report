@@ -101,6 +101,14 @@ table.rt td:first-child{text-align:left;color:var(--ink2)}
 table.rt tr:last-child td{border-bottom:none}
 table.rt tr.cur td{background:var(--accent-weak)}
 table.rt .d-up{color:var(--up)} table.rt .d-down{color:var(--down)} table.rt .d-flat{color:var(--ink3)}
+table.rt tbody tr:hover td{background:#f8f9fc}
+table.rt tbody tr:nth-child(even) td{background:#fafbfd}
+table.rt tbody tr:nth-child(even):hover td{background:#f3f5fa}
+table.rt .eval-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+table.rt .eval-badge.good{background:#e9f7f0;color:#1e9e62}
+table.rt .eval-badge.warn{background:#fdf1e3;color:#c77c1a}
+table.rt .eval-badge.bad{background:#fde8eb;color:#d5384a}
+table.rt .eval-badge.flat{background:#f0f2f7;color:var(--ink3)}
 
 .summary{font-size:13.5px;line-height:2;color:var(--ink)}
 .summary b{color:var(--accent)}
@@ -133,6 +141,7 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
 .badge.daily{background:#eef1fe;color:#4f6ef7}
 .badge.weekly{background:#e9f7f0;color:#1e9e62}
 .badge.monthly{background:#fdf1e3;color:#c77c1a}
+.badge.yearly{background:#f0e9f7;color:#7c5cd6}
 .snap-item{display:flex;align-items:center;gap:12px;padding:12px 6px;border-bottom:1px solid #f0f2f7}
 .snap-item:last-child{border-bottom:none}
 .snap-item .info{flex:1}
@@ -196,6 +205,7 @@ let state={rows:[],columns:[],config:{},sourceName:'',targets:{}};
 /* 显示名映射（财务报表风）：只改界面文案，不改数据列名/数据库字段 */
 const DISP_NAMES={'总收入':'GMV','总支出':'总消耗','净收入':'净利','总退款':'退款','总推广支出':'推广消耗','总销量':'销量(件)'};
 const KPI_EMOJIS={'总收入':'💰','总支出':'📉','净收入':'✨','总退款':'🔄','总推广支出':'🚀','总销量':'📦'};
+function dispName(col){return DISP_NAMES[col]||col;}
 const KPI_DESC={'总收入':'成交总额 Gross Merchandise Volume，全渠道成交额汇总','总支出':'营销总花费 = 推广消耗 + 退款金额','净收入':'GMV 扣除推广和退款后的实际利润','总退款':'全渠道退款订单金额合计','总推广支出':'各平台广告投放总花费','总销量':'成交订单总件数'};
 let snapshots=[];
 let curView='daily';      // daily|weekly|monthly|yearly|archive|data
@@ -204,6 +214,7 @@ let chartMetric=null;     // 当前图表选中指标
 const COLORS=['#4f6ef7','#22a06b','#e8790a','#d5497f','#7c5cd6','#0e9bb5','#c95d2b'];
 
 /* ---------- 工具 ---------- */
+const isLocal=()=>location.hostname==='localhost'||location.hostname==='127.0.0.1'||location.hostname==='[::1]';
 const $=s=>document.querySelector(s);
 function toast(msg){const t=$('#toast');t.textContent=msg;t.style.display='block';
   clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2200);}
@@ -718,8 +729,9 @@ function buildReport(type,key){
   for(const col of state.columns){
     chartData[col]=chartKeys.map(k=>aggRows(groups.get(k)||[],col));
   }
-  // 明细表：近 8 期
-  const tStart=Math.max(0,idx-7);
+  // 明细表：日报近30天，其他近8期
+  const lookBack=type==='daily'?29:7;
+  const tStart=Math.max(0,idx-lookBack);
   const tableKeys=list.slice(tStart,idx+1).reverse();
   const tableRows=tableKeys.map(k=>{
     const row={key:k,label:periodTitle(type,k),vals:kpiCols.map(col=>aggRows(groups.get(k)||[],col))};
@@ -1073,7 +1085,7 @@ function renderReportView(c,snapshot){
         const col=!p.target?'#c9d1e3':(good?'#1e9e62':p.status==='持平'?'#c77c1a':'#d5384a');
         pb+=`<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>${esc(dispName(metric))} 目标 ${fmtVal(p.target,'cny')}</span><span style="color:var(--ink2)">${pct.toFixed(0)}% · 预测 <b style="color:${col}">${fmtVal(p.forecast,'cny')}</b> <span style="color:${col};font-weight:600">${p.status}</span></span></div><div style="height:8px;background:#eef1f6;border-radius:5px;overflow:hidden"><div style="width:${pct.toFixed(1)}%;height:100%;background:${col};transition:width .5s"></div></div></div>`;
       }
-      if(pb)html+=`<div class="kpi" style="grid-column:1/-1;background:linear-gradient(135deg,var(--card),rgba(79,110,247,.05))"><div class="name">🎯 月度目标进度 <span style="font-size:11px;color:var(--ink3)">${monthLabel(tmon)}</span> <span class="sub" style="margin-left:4px">月报页可设/改目标</span></div><div style="margin-top:8px">${pb}</div></div>`;
+      if(pb)html+=`<div class="kpi" style="grid-column:1/-1;background:linear-gradient(135deg,var(--card),rgba(79,110,247,.05))"><div class="kpi-name">🎯 月度目标进度 <span style="font-size:11px;color:var(--ink3)">${monthLabel(tmon)}</span> <span class="sub" style="margin-left:4px">月报页可设/改目标</span></div><div style="margin-top:8px">${pb}</div></div>`;
     }
   }
   html+='</div>';
@@ -1094,7 +1106,9 @@ function renderReportView(c,snapshot){
   </div>`;
 
   // 明细表
-  html+=`<div class="card"><h3>明细 <span class="sub">近 ${rep.tableRows.length} 期（环比上期）</span></h3><div style="overflow-x:auto"><table class="rt"><thead><tr><th>期间</th>`;
+  const detailTitle=type==='daily'?'数据明细·近30天日度明细':'明细';
+  const detailSub=type==='daily'?`当前周期：${esc(rep.key)} · 默认按时间降序 · 点击列名排序`:`近 ${rep.tableRows.length} 期（环比上期）`;
+  html+=`<div class="card"><h3>${esc(detailTitle)} <span class="sub">${detailSub}</span></h3><div style="overflow-x:auto"><table class="rt"><thead><tr><th>期间</th>`;
   for(const k of rep.kpis)html+=`<th>${esc(k.name)}</th>`;
   html+='</tr></thead><tbody>';
   for(const row of rep.tableRows){
@@ -1114,26 +1128,27 @@ function renderReportView(c,snapshot){
   html+='</tbody></table></div></div>';
 
   // 同比环比矩阵：核心指标横评总表
-  html+=`<div class="card"><h3>同比环比矩阵 <span class="sub">核心指标横评 · 涨红跌绿</span></h3><div style="overflow-x:auto"><table class="rt"><thead><tr><th>指标</th><th style="text-align:right">本期</th><th style="text-align:right">上期</th><th style="text-align:right">环比</th><th>评估</th></tr></thead><tbody>`;
+  html+=`<div class="card"><h3>同比环比矩阵</h3><div style="font-size:12.5px;color:var(--ink3);margin:-8px 0 14px">核心指标横评 · 涨红跌绿 · 环比基准：${esc(rep.prevTitle)}</div><div style="overflow-x:auto"><table class="rt matrix"><thead><tr><th>指标</th><th style="text-align:right">本期</th><th style="text-align:right">上期</th><th style="text-align:right">环比</th><th>评估</th></tr></thead><tbody>`;
   for(const k of rep.kpis){
     let dc='<span class="d-flat">—</span>',stxt='—',scls='d-flat';
     if(k.delta!=null){
       const up=k.delta>0,good=k.invert?!up:up;
       const cls=k.invert?(up?'d-down':'d-up'):(up?'d-up':'d-down');
-      dc=`<span class="${cls}">${up?'▲':'▼'} ${Math.abs(k.delta).toFixed(1)}%</span>`;
+      dc=`<span class="${cls}">${up?'↗':'↘'} ${Math.abs(k.delta).toFixed(1)}%</span>`;
       const ad=Math.abs(k.delta);
-      if(ad<5){stxt='平稳';scls='d-flat';}
-      else if(good){stxt='向好';scls='d-up';}
-      else{stxt='需关注';scls='d-down';}
-    }else if(k.cur!=null){stxt='首期';scls='d-flat';}
-    html+=`<tr><td>${esc(k.name)}</td><td style="text-align:right;font-weight:600">${k.cur==null?'—':fmtVal(k.cur,k.fmt)}</td><td style="text-align:right;color:var(--ink3)">${k.prev==null?'—':fmtVal(k.prev,k.fmt)}</td><td style="text-align:right">${dc}</td><td><span class="${scls}">${stxt}</span></td></tr>`;
+      if(ad<5){stxt='平稳';scls='flat';}
+      else if(good){stxt='表现良好';scls='good';}
+      else{stxt='需关注';scls='warn';}
+    }else if(k.cur!=null){stxt='首期';scls='flat';}
+    html+=`<tr><td style="font-weight:600">${esc(k.name)}</td><td style="text-align:right;font-weight:600">${k.cur==null?'—':fmtVal(k.cur,k.fmt)}</td><td style="text-align:right;color:var(--ink3)">${k.prev==null?'—':fmtVal(k.prev,k.fmt)}</td><td style="text-align:right">${dc}</td><td><span class="eval-badge ${scls}">${stxt}</span></td></tr>`;
   }
-  html+='</tbody></table></div></div>';
+  html+=`</tbody></table></div><div style="margin-top:10px;padding:8px 10px;background:#f8f9fc;border-radius:6px;font-size:11.5px;color:var(--ink3);line-height:1.7">口径说明：涨红跌绿（中国习惯）——收益类指标上涨为红、下跌为绿；消耗类指标（总消耗 / 推广消耗 / 退款）方向反转。总消耗口径 = 推广消耗 + 退款金额；2026-07 起部分日期录入值与公式存在差异，当前按原始数据展示。</div></div>`;
 
   // 数据洞察
   html+=`<div class="card"><h3>数据洞察 <span class="sub">自动分析</span></h3><div class="summary">${rep.summary||'—'}</div></div>`;
 
   c.innerHTML=html;
+  c.querySelectorAll('[data-pt]').forEach(el=>el.onclick=()=>switchView(el.dataset.pt));
 
   // 绑定事件
   if(snapshot){
@@ -1195,7 +1210,7 @@ function renderArchive(c){
   }
   let html='<div class="card"><h3>已归档报告 <span class="sub">最多保留 60 份，保存在本机</span></h3>';
   for(const s of snapshots){
-    const tn=s.type==='daily'?'日报':s.type==='weekly'?'周报':'月报';
+    const tn=s.type==='daily'?'日报':s.type==='weekly'?'周报':s.type==='monthly'?'月报':'年报';
     html+=`<div class="snap-item">
       <span class="badge ${s.type}">${tn}</span>
       <div class="info"><div class="t">${esc(s.title)}</div>
@@ -1329,7 +1344,7 @@ function renderDataMgr(c){
   $('#demoBtn').onclick=()=>{genDemo();saveState();curPeriod=null;toast('已载入演示数据');render();};
   // 自动同步数据源卡片（仅本地服务模式可用）
   const srcInfo=$('#srcInfo'),srcInput=$('#srcPathInput'),srcBtn=$('#srcPathBtn');
-  if(!/^https?:$/.test(location.protocol)){
+  if(!isLocal()){
     if(srcInfo)srcInfo.innerHTML='当前是直接打开的网页文件，自动同步未运行。<br>双击 <b>启动报告系统.command</b> 启动本地服务后，即可在此配置自动同步的数据源。';
     if(srcInput)srcInput.disabled=true;if(srcBtn)srcBtn.disabled=true;
   }else{
@@ -1360,7 +1375,7 @@ function renderDataMgr(c){
   }
   /* ---------- 数据编辑（SQLite CRUD，需本地服务） ---------- */
   const edDate=$('#editDate'),edGrid=$('#editGrid');
-  const isServed=/^https?:$/.test(location.protocol);
+  const isLocalMode=isLocal();
   if(edDate&&state.rows.length)edDate.value=state.rows[state.rows.length-1].date;
   function renderEditGrid(values){
     if(!state.columns.length){edGrid.innerHTML='暂无指标，先导入数据。';return;}
@@ -1374,7 +1389,7 @@ function renderDataMgr(c){
     }
     edGrid.innerHTML=h+'</div>';
   }
-  if(!isServed){
+  if(!isLocalMode){
     if(edGrid)edGrid.innerHTML='数据编辑需要本地服务运行（数据库直连）。线上版为只读快照，编辑请用本地版。';
     ['loadDayBtn','newDayBtn','saveDayBtn','delDayBtn','syncNowBtn'].forEach(id=>{const b=$('#'+id);if(b)b.disabled=true;});
   }else{
@@ -1443,7 +1458,7 @@ window.addEventListener('resize',()=>{
 
 /* ---------- 自动同步：本地报告服务在线时，Excel 一变报告自动刷新 ---------- */
 function autoSyncNow(quiet){
-  if(!/^https?:$/.test(location.protocol))return;   // file:// 打开时无服务，静默跳过
+  if(!isLocal())return;   // 仅本地服务可用
   fetch('/data.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
     if(!d||!d.rows||!d.rows.length)return;
     if(!d.ok&&!d.updatedAt)return;                  // 服务端还没解析出任何数据
