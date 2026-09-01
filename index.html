@@ -275,23 +275,26 @@ function addDays(s,n){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);r
 /* ---------- 格式化 ---------- */
 function compactNum(v){
   const a=Math.abs(v);
-  if(a>=1e8)return (v/1e8).toFixed(2).replace(/\.?0+$/,'')+'亿';
-  if(a>=1e4)return (v/1e4).toFixed(1).replace(/\.0$/,'')+'万';
-  return v.toLocaleString('zh-CN',{maximumFractionDigits:2});
+  if(a>=1e8)return (v/1e8).toFixed(2)+'亿';
+  if(a>=1e4)return (v/1e4).toFixed(2)+'万';
+  return v.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function fmtVal(v,fmt){
   if(v==null||isNaN(v))return '—';
   switch(fmt){
-    case 'cny':return '¥'+compactNum(Math.round(v));
+    case 'cny':return '¥'+compactNum(v);
     case 'pct':return v.toFixed(2)+'%';
     case 'float2':return v.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
-    default:return Math.round(v).toLocaleString('zh-CN');
+    default:return v.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
 }
 function fmtValAxis(v,fmt){
+  if(v==null||isNaN(v))return '—';
   if(fmt==='pct')return v.toFixed(1)+'%';
-  if(fmt==='cny')return '¥'+compactNum(v);
-  return compactNum(v);
+  const a=Math.abs(v);
+  if(a>=1e8)return (v/1e8).toFixed(1).replace(/\.0$/,'')+'亿';
+  if(a>=1e4)return (v/1e4).toFixed(1).replace(/\.0$/,'')+'万';
+  return Math.round(v).toLocaleString('zh-CN');
 }
 
 /* ---------- 聚合 ---------- */
@@ -673,7 +676,7 @@ function targetCardHtml(monthKey){
         <div style="width:${pct.toFixed(1)}%;height:100%;background:${barColor};transition:width .5s"></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:12.5px;color:var(--ink2)">
-        <span>累计 <b style="color:var(--ink)">${fmtVal(p.cumulative,'cny')}</b>${p.target?` <span style="color:var(--ink3)">/ ${fmtVal(p.target,'cny')} · ${pct.toFixed(0)}%</span>`:''}</span>
+        <span>累计 <b style="color:var(--ink)">${fmtVal(p.cumulative,'cny')}</b>${p.target?` <span style="color:var(--ink3)">/ ${fmtVal(p.target,'cny')} · ${pct.toFixed(2)}%</span>`:''}</span>
         ${p.target?`<span>预测月底 <b style="color:${barColor}">${fmtVal(p.forecast,'cny')}</b> · <span style="color:${barColor};font-weight:600">${p.status}</span>${gap!==0?`（${gap>0?'超':'差'} ${fmtVal(Math.abs(gap),'cny')}）`:''}</span>`:''}
       </div>
     </div>`;
