@@ -1354,7 +1354,7 @@ function renderReportView(c,snapshot){
     periodNavHtml(type,rep.key)+
     `<div style="display:flex;justify-content:space-between;align-items:center;margin:2px 0 14px;font-size:12.5px;color:var(--ink2)">
       <div class="period-tabs" style="display:flex;gap:2px">
-        ${['daily','weekly','monthly','yearly'].map(t=>`<span style="padding:4px 12px;border-radius:6px;font-size:13px;cursor:pointer;${t===type?'background:var(--accent-weak);color:var(--accent);font-weight:600':'color:var(--ink3)'}">${{daily:'日报',weekly:'周报',monthly:'月报',yearly:'年报'}[t]}</span>`).join('')}
+        ${['daily','weekly','monthly','yearly'].map(t=>`<span onclick="switchView('${t}')" style="padding:4px 12px;border-radius:6px;font-size:13px;cursor:pointer;${t===type?'background:var(--accent-weak);color:var(--accent);font-weight:600':'color:var(--ink3)'}">${{daily:'日报',weekly:'周报',monthly:'月报',yearly:'年报'}[t]}</span>`).join('')}
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span>当前周期 <b style="color:var(--ink)">${esc(rep.title)}</b></span>
