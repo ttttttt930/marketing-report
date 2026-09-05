@@ -157,6 +157,22 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
   .content{padding:0;max-width:none}
   .card{box-shadow:none;border-color:#ddd;break-inside:avoid}
 }
+/* ---------- 数据解锁层 ---------- */
+.lock-layer{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(1200px 800px at 50% 20%,#f4f6fb 0%,#e8ecf4 60%,#dde3ee 100%)}
+.lock-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:36px 34px 30px;width:min(400px,92vw);
+  box-shadow:0 24px 60px rgba(30,42,66,.14);text-align:center}
+.lock-emoji{font-size:40px;margin-bottom:10px}
+.lock-t1{font-size:19px;font-weight:700;color:var(--ink)}
+.lock-t2{font-size:12.5px;color:var(--ink3);margin:6px 0 20px;line-height:1.6}
+.lock-card input{width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:10px;height:42px;
+  padding:0 14px;font-size:14px;font-family:inherit;text-align:center;letter-spacing:.5px;outline:none;transition:border-color .2s}
+.lock-card input:focus{border-color:var(--accent)}
+.lock-card .btn{width:100%;margin-top:12px;height:42px;border-radius:10px;font-size:14px}
+.lock-err{color:#d5384a;font-size:12.5px;margin-top:10px;min-height:18px}
+.lock-foot{font-size:11px;color:var(--ink3);margin-top:16px;line-height:1.6}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+.lock-card.shake{animation:shake .45s}
 </style>
 </head>
 <body>
@@ -189,6 +205,17 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
 </div>
 <div class="tooltip" id="tooltip"></div>
 <div class="toast" id="toast"></div>
+<div class="lock-layer" id="lockLayer" style="display:none">
+  <div class="lock-card" id="lockCard">
+    <div class="lock-emoji">🔐</div>
+    <div class="lock-t1">时间法则营销数据总览</div>
+    <div class="lock-t2">本看板数据已加密保护<br>请输入访问密码解锁查看</div>
+    <input type="password" id="lockPw" placeholder="访问密码" autocomplete="off">
+    <button class="btn primary" id="lockBtn">🔓 解锁看板</button>
+    <div class="lock-err" id="lockErr"></div>
+    <div class="lock-foot">数据经 AES-256 加密存储与传输 · 密码由管理员分发<br>仅限授权人员查看，请勿外传链接与密码</div>
+  </div>
+</div>
 <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" onerror="window.__noXLSX=true"></script>
@@ -602,6 +629,63 @@ function loadAll(){
       state.config=c||{};for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
       chartMetric=state.columns[0];return;}
   genDemo();saveState();
+}
+
+/* ---------- 数据加密 / 解密（AES-256-GCM，与 generate-deploy-data.js 参数一致） ---------- */
+const SS_PW='mrs_unlock_pw';
+const LS_GHTOKEN='mrs_gh_token';
+const GH_REPO='ttttttt930/marketing-report',GH_BRANCH='main',GH_DATA_PATH='marketing-data.js';
+const enc2hex=buf=>[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+const hex2buf=h=>new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)));
+async function deriveKey(password,saltBytes,iter){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:saltBytes,iterations:iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function decryptSnapshot(enc,password){
+  const key=await deriveKey(password,hex2buf(enc.salt),enc.iter||150000);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:hex2buf(enc.iv)},key,hex2buf(enc.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function encryptSnapshot(obj,password){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(password,salt,150000);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(obj))));
+  return {v:1,iter:150000,salt:enc2hex(salt),iv:enc2hex(iv),ct:enc2hex(ct),
+    updatedAt:Date.now(),meta:(obj.rows?obj.rows.length+'天 '+(obj.columns||[]).length+'项指标':'')};
+}
+/* ---------- 启动流程：加密快照需先解锁 ---------- */
+function boot(){
+  if(window.EMBEDDED_DATA){loadAll();return;}   // 明文快照（本地版）
+  const enc=window.ENCRYPTED_DATA;
+  if(!enc){loadAll();return;}                    // 无内嵌数据（本地服务 /data.json）
+  const saved=sessionStorage.getItem(SS_PW);
+  if(saved){tryUnlock(saved,false);}
+  else showLock();
+}
+function showLock(){
+  const l=$('#lockLayer');if(l)l.style.display='flex';
+  const doTry=()=>{const pw=$('#lockPw').value.trim();if(!pw){$('#lockErr').textContent='请输入密码';return;}tryUnlock(pw,true);};
+  $('#lockBtn').onclick=doTry;
+  $('#lockPw').onkeydown=e=>{if(e.key==='Enter')doTry();};
+  setTimeout(()=>{try{$('#lockPw').focus();}catch(e){}},120);
+}
+async function tryUnlock(pw,fromInput){
+  const err=$('#lockErr');
+  try{
+    const payload=await decryptSnapshot(window.ENCRYPTED_DATA,pw);
+    if(!payload||!payload.rows||!payload.rows.length)throw new Error('empty');
+    window.EMBEDDED_DATA=payload;
+    try{sessionStorage.setItem(SS_PW,pw);}catch(e){}
+    state._unlockPw=pw;                            // 仅内存保留，线上填报重新加密时复用
+    const l=$('#lockLayer');if(l)l.style.display='none';
+    loadAll();render();
+  }catch(e){
+    if(err)err.textContent='密码错误，请重试';
+    const card=$('#lockCard');
+    if(card){card.classList.remove('shake');void card.offsetWidth;card.classList.add('shake');}
+    if(fromInput)$('#lockPw').select();
+  }
 }
 
 /* ---------- 报告构建 ---------- */
@@ -1325,6 +1409,10 @@ function renderDataMgr(c){
     <div class="hint" style="margin-top:10px">保存直接写入 SQLite 数据库（<b>${esc(state.sourceName||'')}</b>），报告约 3 秒内自动刷新。同一天只覆盖填了值的指标。线上 GitHub Pages 版为每日只读快照。</div>
   </div>
   <div class="card"><h3>ℹ️ 当前数据</h3>${infoHtml}</div>
+  <div class="card"><h3>☁️ 线上数据填报 <span class="sub">手机 / 浏览器直接提交 · 自动重新部署</span></h3>
+    <div id="cloudBox"></div>
+    <div class="hint" style="margin-top:10px">提交后数据重新加密并推送到 GitHub 仓库，Pages 约 1-3 分钟自动更新。Token 仅保存在<b>本机浏览器</b>（需 Contents 读写权限）。<br>生成 Fine-grained Token：GitHub → Settings → Developer settings → Fine-grained tokens → 仅选 marketing-report 仓库 → Repository permissions 里 Contents 设为 <b>Read and write</b>。</div>
+  </div>
   <div class="card"><h3>⚙️ 指标设置 <span class="sub">影响聚合方式、显示格式与涨跌好坏判断</span></h3>
     ${state.columns.length?`<div style="overflow-x:auto"><table class="plain">
       <thead><tr><th>字段</th><th>显示名</th><th>聚合方式</th><th>格式</th><th>核心指标</th><th>越小越好</th></tr></thead>
@@ -1438,6 +1526,89 @@ function renderDataMgr(c){
       }).catch(()=>{syncNow.disabled=false;syncNow.textContent='🔄 从 Excel 立即同步';toast('本地服务未响应');});
     };
   }
+  /* ---------- 线上数据填报（GitHub API 自动部署） ---------- */
+  const cloudBox=$('#cloudBox');
+  function renderCloudGrid(values){
+    if(!state.columns.length){cloudGrid.innerHTML='暂无指标，先导入数据。';return;}
+    let h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 14px">';
+    for(const col of state.columns){
+      const v=values&&values[col]!==undefined&&values[col]!==null?values[col]:'';
+      h+=`<label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink2)">
+        <span>${esc(col)}</span>
+        <input type="number" step="any" data-cloud="${esc(col)}" value="${v}" placeholder="—"
+          style="border:1px solid var(--line);border-radius:7px;height:30px;padding:0 8px;font-size:13px;font-family:inherit"></label>`;
+    }
+    cloudGrid.innerHTML=h+'</div>';
+  }
+  if(cloudBox){
+    const unlocked=!!state._unlockPw;
+    const token=localStorage.getItem(LS_GHTOKEN)||'';
+    const lastDate=state.rows.length?state.rows[state.rows.length-1].date:'';
+    cloudBox.innerHTML=`
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <span class="hint" style="margin:0">访问密码：${unlocked?'<b style="color:#1e9e62">✓ 已解锁</b>':''}</span>
+        ${unlocked?'':`<input type="password" id="cloudPw" placeholder="输入访问密码" style="width:170px;border:1px solid var(--line);border-radius:7px;height:30px;padding:0 9px;font-size:12.5px;font-family:inherit">`}
+        <span class="hint" style="margin:0 0 0 auto">GitHub Token：</span>
+        <input type="password" id="ghToken" placeholder="github_pat_…（仅保存在本机浏览器）" value="${esc(token)}" style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:7px;height:30px;padding:0 9px;font-size:12.5px;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input type="date" id="cloudDate" value="${lastDate}" style="border:1px solid var(--line);border-radius:8px;height:32px;padding:0 10px;font-size:13px;font-family:inherit">
+        <button class="btn" id="cloudLoadBtn">载入当天</button>
+      </div>
+      <div id="cloudGrid" class="hint" style="margin:0">选择日期后载入或直接填写指标。</div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn primary" id="cloudSubmitBtn">🚀 提交并自动部署</button>
+        <span class="hint" style="display:inline;margin:0">同日已填指标会被覆盖，未填的保留原值</span>
+      </div>`;
+    const cloudGrid=$('#cloudGrid');
+    const ld=state.rows.length?state.rows[state.rows.length-1]:null;
+    if(ld)renderCloudGrid(ld.values);
+    $('#cloudLoadBtn').onclick=()=>{
+      const d=$('#cloudDate').value;
+      if(!d){toast('请先选择日期');return;}
+      const row=state.rows.find(r=>r.date===d);
+      renderCloudGrid(row?row.values:null);
+      toast(row?'已载入 '+d+' 的现有数据':'该日期无现有数据（可当作新增日填写）');
+    };
+    $('#cloudSubmitBtn').onclick=async()=>{
+      const btn=$('#cloudSubmitBtn');
+      try{
+        const pw=state._unlockPw||(($('#cloudPw')||{}).value||'').trim();
+        if(!pw){toast('请先输入访问密码');return;}
+        const tk=($('#ghToken').value||'').trim();
+        if(!tk){toast('请先填写 GitHub Token（Fine-grained，Contents 读写）');return;}
+        const date=$('#cloudDate').value;
+        if(!date){toast('请先选择日期');return;}
+        const values={};let n=0;
+        cloudGrid.querySelectorAll('[data-cloud]').forEach(inp=>{if(inp.value!==''){values[inp.dataset.cloud]=Number(inp.value);n++;}});
+        if(!n){toast('请至少填写一个指标数值');return;}
+        if(!confirm('确认提交 '+date+' 的数据（'+n+' 项指标）到线上仓库并重新部署？'))return;
+        btn.disabled=true;btn.textContent='加密上传中…';
+        const rows=JSON.parse(JSON.stringify(state.rows));
+        const found=rows.find(r=>r.date===date);
+        if(found){for(const k in values)found.values[k]=values[k];}
+        else rows.push({date,values});
+        rows.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+        const payload={rows,columns:state.columns,config:state.config,sourceName:state.sourceName||'营销发展日报.db',updatedAt:Date.now()};
+        const enc=await encryptSnapshot(payload,pw);
+        const text=`/* 自动生成 ${new Date().toISOString()} | 🔐 加密快照 | ${payload.rows.length} 天 ${payload.columns.length} 项指标 | 来源：线上填报 */\nwindow.ENCRYPTED_DATA=${JSON.stringify(enc)};`;
+        btn.textContent='推送到 GitHub…';
+        const bytes=new TextEncoder().encode(text);let bin='';
+        for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+        const ghq=`https://api.github.com/repos/${GH_REPO}/contents/${GH_DATA_PATH}`;
+        const hr={Authorization:'Bearer '+tk,Accept:'application/vnd.github+json','Content-Type':'application/json'};
+        const gr=await fetch(ghq+'?ref='+GH_BRANCH,{headers:hr});
+        if(!gr.ok)throw new Error('读取文件信息失败（'+gr.status+'，检查 Token 权限）');
+        const sha=(await gr.json()).sha;
+        const pr=await fetch(ghq,{method:'PUT',headers:hr,body:JSON.stringify({message:'线上填报 '+date+'（'+n+' 项指标）',content:btoa(bin),sha,branch:GH_BRANCH})});
+        if(!pr.ok){const ej=await pr.json().catch(()=>({}));throw new Error((ej&&ej.message)||('提交失败（'+pr.status+'）'));}
+        localStorage.setItem(LS_GHTOKEN,tk);
+        try{sessionStorage.setItem(SS_PW,pw);}catch(e){}
+        toast('✅ 已提交，线上约 1-3 分钟后自动更新（可 Cmd+Shift+R 刷新查看）');
+      }catch(e){toast('提交失败：'+(e&&e.message||e));}
+      finally{btn.disabled=false;btn.textContent='🚀 提交并自动部署';}
+    };
+  }
   const scb=$('#saveCfgBtn');
   if(scb)scb.onclick=()=>{
     c.querySelectorAll('[data-cfg]').forEach(el=>{
@@ -1508,7 +1679,7 @@ function autoArchiveNewDays(todayStr){
 setInterval(()=>autoSyncNow(false),30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)autoSyncNow(true);});
 
-loadAll();
+boot();
 render();
 autoSyncNow(true);
 </script>
