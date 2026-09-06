@@ -276,9 +276,9 @@ const LS_DATA='reportHub.data.v1', LS_CFG='reportHub.cfg.v1', LS_SNAP='reportHub
 let state={rows:[],columns:[],config:{},sourceName:'',targets:{}};
 /* 显示名映射（财务报表风）：只改界面文案，不改数据列名/数据库字段 */
 const DISP_NAMES={'总收入':'GMV','总支出':'总消耗','净收入':'净利','总退款':'退款','总推广支出':'推广消耗','总销量':'销量(件)'};
-const KPI_EMOJIS={'总收入':'💰','总支出':'📉','净收入':'✨','总退款':'🔄','总推广支出':'🚀','总销量':'📦'};
+const KPI_EMOJIS={'总收入':'💰','总支出':'📉','净收入':'✨','总退款':'🔄','总推广支出':'🚀','总销量':'📦','__material_cost':'🧱','__real_roi':'🎯'};
 function dispName(col){return DISP_NAMES[col]||col;}
-const KPI_DESC={'总收入':'成交总额 Gross Merchandise Volume，全渠道成交额汇总','总支出':'营销总花费 = 推广消耗 + 退款金额','净收入':'GMV 扣除推广和退款后的实际利润','总退款':'全渠道退款订单金额合计','总推广支出':'各平台广告投放总花费','总销量':'成交订单总件数'};
+const KPI_DESC={'总收入':'成交总额 Gross Merchandise Volume，全渠道成交额汇总','总支出':'营销总花费 = 推广消耗 + 退款金额','净收入':'GMV 扣除推广和退款后的实际利润','总退款':'全渠道退款订单金额合计','总推广支出':'各平台广告投放总花费','总销量':'成交订单总件数','__material_cost':'物料成本 = 综合单瓶物料(不含试香) × 总销量；产品按预估月销量加权','__real_roi':'真实ROI = GMV ÷ (物料成本 + 推广支出)，不含试香 BOM 口径'};
 let snapshots=[];
 let curView='dashboard';  // dashboard|daily|weekly|monthly|yearly|archive|data|finance
 let finTab='overview';    // overview|income|platform|balance|assets
@@ -384,6 +384,30 @@ function aggRows(rows,metric){
     for(let i=sorted.length-1;i>=0;i--){const v=sorted[i].values[metric];if(v!=null&&!isNaN(v))return v;}
   }
   return vals.reduce((a,b)=>a+b,0);
+}
+
+/* ---------- 真实 ROI（物料 + 推广 / GMV） ---------- */
+// 综合单瓶物料（按预估月销量加权）：用于估算某时段的总物料成本
+function blendedUnitMaterial(){
+  const items=prodItems();
+  if(!items.length) return null;
+  let totalQty=0, totalCost=0;
+  for(const it of items){
+    const q=+it.est_monthly_qty||0;
+    totalQty+=q; totalCost+=(+it.unit_cost||0)*q;
+  }
+  return totalQty>0 ? +(totalCost/totalQty).toFixed(4) : null;
+}
+// 时段真实 KPI：物料(综合×瓶) + 推广 → 真实ROI = GMV ÷ 真实总成本
+function periodRealStats(rows){
+  const u=blendedUnitMaterial();
+  const qty=rows.reduce((a,r)=>a+(+r.values['总销量']||0),0);
+  const gmv=rows.reduce((a,r)=>a+(+r.values['总收入']||0),0);
+  const promo=rows.reduce((a,r)=>a+(+r.values['总推广支出']||0),0);
+  const materialCost=+(u!=null ? u*qty : 0).toFixed(2);
+  const realCost=+(materialCost+promo).toFixed(2);
+  const realRoi=realCost>0?+(gmv/realCost).toFixed(2):null;
+  return {qty,gmv,promo,materialCost,realCost,realRoi,unitMaterial:u};
 }
 function groupBy(rows,keyFn){
   const map=new Map();
@@ -842,6 +866,21 @@ function buildReport(type,key){
     if(cur!=null&&prev!=null&&prev!==0)delta=(cur-prev)/Math.abs(prev)*100;
     return {col,name:dispName(col),cur,prev,delta,fmt:cfg.fmt,invert:!!cfg.invert,color:COLORS[i%COLORS.length]};
   });
+
+  // 真实 ROI（物料 + 推广 / GMV）—— 仅当有产品快照时计算，追加到 KPI 卡列表
+  if(state.products && state.products.items && state.products.items.length){
+    const curR=periodRealStats(curRows);
+    const prevR=pk?periodRealStats(prevRows):{materialCost:null,realRoi:null};
+    let matDelta=null, roiDelta=null;
+    if(curR.materialCost!=null&&prevR.materialCost!=null&&prevR.materialCost!==0){
+      matDelta=(curR.materialCost-prevR.materialCost)/Math.abs(prevR.materialCost)*100;
+    }
+    if(curR.realRoi!=null&&prevR.realRoi!=null&&prevR.realRoi!==0){
+      roiDelta=(curR.realRoi-prevR.realRoi)/Math.abs(prevR.realRoi)*100;
+    }
+    kpis.push({col:'__material_cost',name:'物料成本',cur:curR.materialCost,prev:prevR.materialCost,delta:matDelta,fmt:'cny',invert:true});
+    kpis.push({col:'__real_roi',name:'真实ROI',cur:curR.realRoi,prev:prevR.realRoi,delta:roiDelta,fmt:'float2',invert:false});
+  }
 
   // 年报：按月展开（1-12 月 + 全年汇总行），图表用月维度、明细正序
   if(type==='yearly'){
@@ -1646,6 +1685,14 @@ function renderDashboard(c){
     ['总退款',tot.refund,fmtCny(tot.refund),'c-red'],
     ['平均ROI',tot.roi,tot.roi!=null?tot.roi.toFixed(2):'—','c-green']
   ];
+  // 真实 ROI（物料 + 推广 / GMV）—— 仅当有产品快照时显示
+  if(state.products && state.products.items && state.products.items.length){
+    const rs=periodRealStats(dashRows());
+    if(rs.realRoi!=null){
+      kpis.push(['物料成本',rs.materialCost,fmtCny(rs.materialCost),'c-red']);
+      kpis.push(['真实ROI',rs.realRoi,rs.realRoi.toFixed(2),'c-green']);
+    }
+  }
   // 毛利率（产品 BOM 测算）— 仅当有产品快照时显示
   const pm=prodMonths();
   if(pm&&pm.overallMarginRate!=null){
