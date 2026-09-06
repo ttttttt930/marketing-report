@@ -1056,6 +1056,7 @@ function prodMonths(){return state.products?{
   monthlyPromoTotal: state.products.monthlyPromoTotal||0,
   promoPeriod: state.products.promoPeriod||null,
   promoPerUnitTotal: state.products.promoPerUnitTotal||0,
+  promoWindowSales: state.products.promoWindowSales||0,
   overallMarginRate: state.products.overallMarginRate,
   lastSync: state.products.lastSync
 }:null;}
@@ -1101,23 +1102,33 @@ function prodViewOverview(){
   const items=prodItems();
   const lines=[...new Set(items.map(i=>i.product_line).filter(Boolean))];
 
-  const realMarginRate = p.monthlyRevenue > 0 && p.monthlyCost != null && p.monthlyPromoTotal != null
-    ? +((p.monthlyRevenue - p.monthlyCost - p.monthlyPromoTotal) / p.monthlyRevenue * 100).toFixed(2)
+  const totalEstQty = items.reduce((a,i)=>a+(i.est_monthly_qty||0),0);
+  const promoPerUnit = p.promoPerUnitTotal || 0;
+  // 月推广分摊（按预估销量滚动，保持与「单瓶真实毛利率」口径一致）= 单瓶推广 × 预估月销量
+  const scaledPromo = +(promoPerUnit * totalEstQty).toFixed(2);
+  const realMarginRate = p.monthlyRevenue > 0 && p.monthlyCost != null
+    ? +((p.monthlyRevenue - p.monthlyCost - scaledPromo) / p.monthlyRevenue * 100).toFixed(2)
     : null;
 
   const kpi=[
-    ['月总收入（估算）',fmoney(p.monthlyRevenue),'c-blue',`7 款产品 · ${items.reduce((a,i)=>a+(i.est_monthly_qty||0),0)} 瓶/月`],
+    ['月总收入（估算）',fmoney(p.monthlyRevenue),'c-blue',`7 款产品 · ${totalEstQty} 瓶/月`],
     ['月物料成本',fmoney(p.monthlyCost),'c-red','BOM × 各组件最低报价（不含试香）'],
-    ['月推广费分摊',fmoney(p.monthlyPromoTotal),'c-orange',p.promoPeriod?`${p.promoPeriod} 推广费 ÷ 月销量`:'最近一月推广费'],
-    ['月真实毛利',fmoney(p.monthlyRevenue - p.monthlyCost - (p.monthlyPromoTotal||0)),realMarginRate>=80?'c-green':'c-blue','收入 − 物料 − 推广'],
+    ['月推广分摊',fmoney(scaledPromo),'c-orange',`单瓶 ¥${promoPerUnit.toFixed(2)} × 预估月销 ${totalEstQty} 瓶`],
+    ['月真实毛利',fmoney(p.monthlyRevenue - p.monthlyCost - scaledPromo),realMarginRate>=70?'c-green':(realMarginRate>=55?'c-blue':'c-red'),'收入 − 物料 − 推广分摊'],
     ['综合毛利率',fpct(p.overallMarginRate),p.overallMarginRate>=90?'c-green':'c-blue','物料成本 ÷ 售价'],
-    ['综合真实毛利率',realMarginRate!=null?fpct(realMarginRate):'—',realMarginRate!=null&&realMarginRate>=80?'c-green':'c-blue','(售价−物料−推广) ÷ 售价'],
+    ['综合真实毛利率',realMarginRate!=null?fpct(realMarginRate):'—',realMarginRate!=null&&realMarginRate>=70?'c-green':(realMarginRate>=55?'c-blue':'c-red'),'(售价−物料−单瓶推广) ÷ 售价'],
   ];
   let h='<div class="dkpis">'+kpi.map(([n,v,cls,desc])=>
     `<div class="dkpi"><div class="k">${n}</div><div class="v ${cls}">${v}</div><div class="kpi-desc" style="margin-top:4px">${desc}</div></div>`).join('')+'</div>';
 
+  if(p.promoPeriod){
+    h+='<div class="kpi-note" style="font-size:12px;color:var(--ink3);margin-top:6px;line-height:1.7">'
+      +`📊 推广分摊口径：逐日 <b>总推广支出 ÷ 当日总销量</b>。${p.promoPeriod} 完整月实测 推广 ¥${fmoney(p.monthlyPromoTotal||0)} ÷ 销量 ${p.promoWindowSales||0} 瓶 = <b>单瓶 ¥${promoPerUnit.toFixed(2)}</b>；`
+      +`月推广分摊按预估月销量 ${totalEstQty} 瓶滚动为 ¥${fmoney(scaledPromo)}（实际月销量约 ${p.promoWindowSales||0} 瓶，故月度口径偏保守）。</div>`;
+  }
+
   h+='<div class="duo-grid">'
-    +'<div class="card"><div class="bar-title">7 款产品物料/推广/真实毛利 <span class="sub">物料=不含试香 BOM · 推广=月推广费÷月销量分摊 · 真实毛利=收入−物料−推广</span></div><div class="chart-box" id="prodCostBar"></div></div>'
+    +'<div class="card"><div class="bar-title">7 款产品物料/推广/真实毛利 <span class="sub">物料=不含试香 BOM · 推广=逐日总推广÷当日总销量 · 真实毛利=收入−物料−单瓶推广</span></div><div class="chart-box" id="prodCostBar"></div></div>'
     +'<div class="card"><div class="bar-title">产品线收入占比 <span class="sub">按产品线分组月收入</span></div><div class="donut-wrap" id="prodLineDonut"></div></div>'
     +'</div>';
 
@@ -1177,7 +1188,7 @@ function prodViewItems(){
       +`<td style="text-align:right;font-weight:600;color:#f54a45">${fmoney(it.real_unit_cost)}</td>`
       +`<td style="text-align:right">${fmoney(it.price)}</td>`
       +`<td style="text-align:right;color:${(it.margin_rate||0)>=90?'#1e9e62':'#f54a45'}">${fpct(it.margin_rate)}</td>`
-      +`<td style="text-align:right;font-weight:600;color:${(it.real_margin_rate||0)>=80?'#1e9e62':'#f54a45'}">${fpct(it.real_margin_rate)}</td>`
+      +`<td style="text-align:right;font-weight:600;color:${(it.real_margin_rate||0)>=60?'#1e9e62':'#f54a45'}">${fpct(it.real_margin_rate)}</td>`
       +`<td style="text-align:right">${(it.est_monthly_qty||0)} 瓶</td>`
       +`<td style="text-align:right;color:#f54a45">${fmoney(it.monthly_cost)}</td>`
       +`<td style="text-align:right;font-weight:600;color:#1e9e62">${fmoney(it.monthly_revenue - it.monthly_cost - (it.monthly_promo||0))}</td></tr>`;
@@ -1197,7 +1208,7 @@ function prodViewItems(){
     }
   });
   h+='</tbody></table></div>'
-    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px">💡 点击行可展开物料明细（按各组件最低报价）。完整报价对比见「🔩 物料报价」标签页。推广分摊 = 月推广费 ÷ 月总销量，按销量加权到每瓶。</div></div>';
+    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px">💡 点击行可展开物料明细（按各组件最低报价）。完整报价对比见「🔩 物料报价」标签页。单瓶推广分摊 = 逐日<b>总推广支出 ÷ 当日总销量</b>（近一完整月实测），加到每瓶物料上即为真实成本。真实毛利率 = (售价−物料−单瓶推广) ÷ 售价。</div></div>';
   return h;
 }
 
