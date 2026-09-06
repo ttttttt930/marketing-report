@@ -239,6 +239,7 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
   <div class="tt-actions" data-page-node-id="wOewKS9Ap0cS9SDfuMv9F0">
     <button class="btn" id="navReport" data-page-node-id="1Febeg2oYmHFo6OhUlx5nS">🔍 数据查询</button>
     <button class="btn" id="navFinance">💰 财务报表</button>
+    <button class="btn" id="navProduct">📦 产品成本</button>
     <button class="btn" id="navArchive" data-page-node-id="9beGwGzm6YH37nG7eayAhu">🗂️ 归档</button>
     <button class="btn" id="navData" data-page-node-id="KjAQL0d6v0zjAJZ5IKA5cc">⚙️ 数据管理</button>
     <button class="btn primary" id="navEntry" data-page-node-id="fGH9dcGJfi6eP2ohL628RH">＋ 数据录入</button>
@@ -1040,6 +1041,199 @@ function render(){
   renderReportView(c);
 }
 
+/* ---------- 产品成本（总览 / 产品明细 / 物料报价 / 供应商） ---------- */
+let prodTab='overview';   // overview|items|quotes|suppliers
+function prodItems(){return (state.products&&state.products.items)||[];}
+function prodQuoteStats(){return (state.products&&state.products.quoteStats)||{};}
+function prodMonths(){return state.products?{
+  monthlyCost: state.products.monthlyCost,
+  monthlyRevenue: state.products.monthlyRevenue,
+  monthlyGrossProfit: state.products.monthlyGrossProfit,
+  overallMarginRate: state.products.overallMarginRate,
+  lastSync: state.products.lastSync
+}:null;}
+
+function renderProducts(c){
+  const p=state.products;
+  if(!p||!p.items||!p.items.length){
+    c.innerHTML='<div class="card"><div class="empty"><div class="big">📦</div><p>暂无产品成本数据</p>'
+      +'<p style="font-size:12px;color:var(--ink3)">在项目目录运行 <code>node sync-products.js</code>：导入供应商物料报价 + 产品 BOM Excel</p>'
+      +'<p style="font-size:11.5px;color:var(--ink3);margin-top:6px">需要 <code>供应商物料报价.xlsx</code> + <code>products.xlsx</code> 两个文件</p></div></div>';
+    return;
+  }
+  const tabs=[['overview','📊 总览'],['items','💄 产品明细'],['quotes','🔩 物料报价'],['suppliers','🏭 供应商']];
+  let html='<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px">'
+    +'<div class="bar-title" style="margin:0">产品成本 <span class="sub">口径：按 BOM × 各组件最低供应商报价 × 预估月销量</span></div>'
+    +'<div class="seg no-print" style="margin-left:auto">'+tabs.map(t=>`<a class="${prodTab===t[0]?'on':''}" onclick="prodTab='${t[0]}';render()">${t[1]}</a>`).join('')+'</div></div>'
+    +`<div style="font-size:11.5px;color:var(--ink3);margin-top:10px;line-height:1.7">⚠️ 单瓶成本 = BOM 中每个组件用量 × 该组件最低供应商报价（不含包材外的物流/人工/检测费）。月销量来自 <code>products.xlsx</code>「预估月销量」列。月收入/毛利由单瓶售价/成本 × 月销量推算。最后同步：${p.lastSync?new Date(p.lastSync).toLocaleString('zh-CN'):'—'}。</div></div>`;
+
+  if(prodTab==='overview')  html+=prodViewOverview();
+  if(prodTab==='items')     html+=prodViewItems();
+  if(prodTab==='quotes')    html+=prodViewQuotes();
+  if(prodTab==='suppliers') html+=prodViewSuppliers();
+
+  c.innerHTML=html;
+
+  // 图表在 innerHTML 落地后渲染
+  if(prodTab==='overview'){
+    const items=prodItems();
+    const labels=items.map(i=>i.name);
+    renderChart($('#prodCostBar'),labels,[
+      {name:'单瓶成本',values:items.map(i=>i.unit_cost),color:'#e8790a'},
+      {name:'单瓶毛利',values:items.map(i=>i.margin),color:'#22a06b'}
+    ],'cny');
+    renderDonut($('#prodLineDonut'), items.reduce((m,i)=>{if(i.product_line)m[i.product_line]=(m[i.product_line]||0)+i.monthly_revenue;return m;},{}),'产品线收入占比');
+  }
+}
+
+/* ===== 总览 ===== */
+function prodViewOverview(){
+  const p=prodMonths();
+  const items=prodItems();
+  const lines=[...new Set(items.map(i=>i.product_line).filter(Boolean))];
+
+  const kpi=[
+    ['月总收入（估算）',fmoney(p.monthlyRevenue),'c-blue',`7 款产品 · ${items.reduce((a,i)=>a+(i.est_monthly_qty||0),0)} 瓶/月`],
+    ['月物料成本',fmoney(p.monthlyCost),'c-red','BOM × 各组件最低报价'],
+    ['月毛利',fmoney(p.monthlyGrossProfit),'c-green','收入 − 物料成本'],
+    ['综合毛利率',fpct(p.overallMarginRate),p.overallMarginRate>=90?'c-green':'c-blue','不含销售/管理/财务费用'],
+  ];
+  let h='<div class="dkpis">'+kpi.map(([n,v,cls,desc])=>
+    `<div class="dkpi"><div class="k">${n}</div><div class="v ${cls}">${v}</div><div class="kpi-desc" style="margin-top:4px">${desc}</div></div>`).join('')+'</div>';
+
+  h+='<div class="duo-grid">'
+    +'<div class="card"><div class="bar-title">7 款产品单瓶成本 vs 毛利 <span class="sub">按各组件最低供应商报价测算</span></div><div class="chart-box" id="prodCostBar"></div></div>'
+    +'<div class="card"><div class="bar-title">产品线收入占比 <span class="sub">按产品线分组月收入</span></div><div class="donut-wrap" id="prodLineDonut"></div></div>'
+    +'</div>';
+
+  // 产品线小汇总表
+  h+='<div class="card"><h3>按产品线汇总 <span class="sub">BOM 测算 · 单位：元 / 月</span></h3><div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
+    +'<th>产品线</th><th style="text-align:right">产品数</th><th style="text-align:right">月销量(瓶)</th>'
+    +'<th style="text-align:right">月收入</th><th style="text-align:right">月成本</th><th style="text-align:right">月毛利</th><th style="text-align:right">毛利率</th></tr></thead><tbody>';
+  for(const line of lines){
+    const sub=items.filter(i=>i.product_line===line);
+    const sum=k=>sub.reduce((a,i)=>a+(i['monthly_'+k]||0),0);
+    const rev=sum('revenue'),cost=sum('cost'),gp=sum('gross_profit');
+    const qty=sub.reduce((a,i)=>a+(i.est_monthly_qty||0),0);
+    const mr=rev>0?gp/rev*100:0;
+    h+=`<tr><td>${esc(line)}</td><td style="text-align:right">${sub.length}</td><td style="text-align:right">${qty}</td>`
+      +`<td style="text-align:right">${fmoney(rev)}</td><td style="text-align:right;color:#f54a45">${fmoney(cost)}</td>`
+      +`<td style="text-align:right;font-weight:600;color:${gp>=0?'#1e9e62':'#f54a45'}">${fmoney(gp)}</td>`
+      +`<td style="text-align:right;font-weight:600;color:${mr>=90?'#1e9e62':'#f54a45'}">${fpct(mr)}</td></tr>`;
+  }
+  const sumRev=p.monthlyRevenue,sumCost=p.monthlyCost,sumGp=p.monthlyGrossProfit;
+  h+=`<tr style="font-weight:600;background:var(--accent-weak,#eef3fd)"><td>合计</td><td style="text-align:right">${items.length}</td><td style="text-align:right">${items.reduce((a,i)=>a+(i.est_monthly_qty||0),0)}</td>`
+    +`<td style="text-align:right">${fmoney(sumRev)}</td><td style="text-align:right;color:#f54a45">${fmoney(sumCost)}</td>`
+    +`<td style="text-align:right;color:#1e9e62">${fmoney(sumGp)}</td><td style="text-align:right;color:#1e9e62">${fpct(p.overallMarginRate)}</td></tr>`;
+  h+='</tbody></table></div></div>';
+
+  // 自动洞察
+  const sortedByMargin=[...items].sort((a,b)=>(b.margin_rate||0)-(a.margin_rate||0));
+  const sortedByCost=[...items].sort((a,b)=>(b.unit_cost||0)-(a.unit_cost||0));
+  const cheapestUnit=items.filter(i=>i.unit_cost>0).sort((a,b)=>a.unit_cost-b.unit_cost)[0];
+  const dearestUnit=[...items].sort((a,b)=>b.unit_cost-a.unit_cost)[0];
+  const ins=[];
+  ins.push(`📦 7 款产品 <b>${items.reduce((a,i)=>a+(i.est_monthly_qty||0),0)}</b> 瓶/月，预估月收入 <b>${fmoney(sumRev)}</b>，物料成本 <b>${fmoney(sumCost)}</b>，月毛利 <b>${fmoney(sumGp)}</b>，综合毛利率 <b>${fpct(p.overallMarginRate)}</b>。`);
+  if(cheapestUnit)ins.push(`💡 单瓶成本最低：<b>${esc(cheapestUnit.name)}</b> ¥${cheapestUnit.unit_cost.toFixed(2)}（毛利率 ${(cheapestUnit.margin_rate||0).toFixed(2)}%）；成本最高：<b>${esc(dearestUnit.name)}</b> ¥${dearestUnit.unit_cost.toFixed(2)}（${(dearestUnit.margin_rate||0).toFixed(2)}%）。`);
+  if(sortedByMargin[0])ins.push(`🏆 毛利率冠军：<b>${esc(sortedByMargin[0].name)}</b> ${(sortedByMargin[0].margin_rate||0).toFixed(2)}%；毛利率最低：<b>${esc(sortedByMargin[sortedByMargin.length-1].name)}</b> ${(sortedByMargin[sortedByMargin.length-1].margin_rate||0).toFixed(2)}%。`);
+  h+='<div class="card"><div class="bar-title">产品成本洞察 <span class="sub">自动生成</span></div>'
+    +'<ul style="margin:0;padding-left:18px;line-height:2;font-size:13px">'+ins.map(s=>`<li>${s}</li>`).join('')+'</ul></div>';
+  return h;
+}
+
+/* ===== 产品明细 ===== */
+let prodItemExpand=null;
+function prodViewItems(){
+  const items=prodItems();
+  let h='<div class="card"><h3>7 款产品成本明细 <span class="sub">单瓶成本 = BOM × 各组件最低报价 · 月毛利 = (售价−成本) × 预估月销量</span></h3>'
+    +'<div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
+    +'<th></th><th>产品名</th><th>规格</th><th>产品线</th><th style="text-align:right">单瓶成本</th>'
+    +'<th style="text-align:right">售价</th><th style="text-align:right">毛利率</th><th style="text-align:right">月销量</th>'
+    +'<th style="text-align:right">月成本</th><th style="text-align:right">月毛利</th></tr></thead><tbody>';
+  items.forEach((it,i)=>{
+    const open=prodItemExpand===i;
+    h+=`<tr style="cursor:pointer;${open?'background:var(--accent-weak,#eef3fd)':''}" onclick="prodItemExpand=${open?'null':i};render()">`
+      +`<td style="text-align:center;color:var(--ink3)">${open?'▼':'▶'}</td>`
+      +`<td><b>${esc(it.name)}</b></td><td style="color:var(--ink3)">${esc(it.spec||'')}</td>`
+      +`<td>${esc(it.product_line||'')}</td>`
+      +`<td style="text-align:right;color:#f54a45">${fmoney(it.unit_cost)}</td>`
+      +`<td style="text-align:right">${fmoney(it.price)}</td>`
+      +`<td style="text-align:right;font-weight:600;color:${(it.margin_rate||0)>=90?'#1e9e62':'#f54a45'}">${fpct(it.margin_rate)}</td>`
+      +`<td style="text-align:right">${(it.est_monthly_qty||0)} 瓶</td>`
+      +`<td style="text-align:right;color:#f54a45">${fmoney(it.monthly_cost)}</td>`
+      +`<td style="text-align:right;font-weight:600;color:#1e9e62">${fmoney(it.monthly_gross_profit)}</td></tr>`;
+    if(open){
+      h+=`<tr><td colspan="10" style="background:var(--bg-soft,#f7f8fc);padding:14px 18px"><div style="font-size:12px;color:var(--ink3);margin-bottom:8px">物料明细 · 按组件最低供应商报价 × 用量</div>`;
+      h+='<table style="width:100%;font-size:12.5px"><thead><tr style="color:var(--ink3);text-align:left"><th>组件</th><th style="text-align:right">用量</th><th style="text-align:right">单价(¥)</th><th style="text-align:right">单项成本</th><th>供应商</th><th style="color:var(--ink3)">备注</th></tr></thead><tbody>';
+      for(const c of it.components||[]){
+        h+=`<tr><td>${esc(c.component)}</td><td style="text-align:right">${c.qty}</td><td style="text-align:right">${(c.unit_price||0).toFixed(2)}</td><td style="text-align:right;color:#f54a45">${(c.line_cost||0).toFixed(2)}</td><td>${esc(c.supplier||'')}</td><td style="color:var(--ink3)">${esc(c.note||'')}</td></tr>`;
+      }
+      h+=`<tr style="font-weight:600;border-top:2px solid var(--border)"><td>合计</td><td colspan="3" style="text-align:right;color:#f54a45">${fmoney(it.unit_cost)}</td><td colspan="2" style="color:var(--ink3)">${(it.components||[]).length} 个组件</td></tr>`;
+      h+='</tbody></table></td></tr>';
+    }
+  });
+  h+='</tbody></table></div>'
+    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px">💡 点击行可展开物料明细（按各组件最低报价）。完整报价对比见「🔩 物料报价」标签页。</div></div>';
+  return h;
+}
+
+/* ===== 物料报价 ===== */
+function prodViewQuotes(){
+  const stats=prodQuoteStats();
+  const comps=Object.keys(stats).sort((a,b)=>stats[b].min-stats[a].min);
+  let h='<div class="card"><h3>各组件供应商报价分布 <span class="sub">按最低/最高/中位/供应商数排序</span></h3>'
+    +'<div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
+    +'<th>组件</th><th style="text-align:right">供应商数</th><th style="text-align:right">最低</th><th style="text-align:right">中位</th><th style="text-align:right">平均</th><th style="text-align:right">最高</th>'
+    +'<th style="text-align:right">价差</th><th style="text-align:right">选型</th></tr></thead><tbody>';
+  for(const c of comps){
+    const s=stats[c];
+    const spread=s.max-s.min;
+    h+=`<tr><td><b>${esc(c)}</b></td>`
+      +`<td style="text-align:right">${s.count}</td>`
+      +`<td style="text-align:right;color:#1e9e62">¥${s.min.toFixed(2)}</td>`
+      +`<td style="text-align:right">¥${s.median.toFixed(2)}</td>`
+      +`<td style="text-align:right">¥${s.avg.toFixed(2)}</td>`
+      +`<td style="text-align:right;color:#f54a45">¥${s.max.toFixed(2)}</td>`
+      +`<td style="text-align:right;color:${spread>1?'#f54a45':'#1e9e62'}">¥${spread.toFixed(2)}</td>`
+      +`<td style="color:var(--ink3)">${esc(s.suppliers[0].supplier)}（${s.suppliers[0].spec||'—'}）</td></tr>`;
+  }
+  h+='</tbody></table></div>'
+    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px">💡 价差 = 最高 − 最低；价差越大议价空间越大。所有产品成本均按每组件「最低报价」测算（保守口径）。</div></div>';
+  return h;
+}
+
+/* ===== 供应商 ===== */
+function prodViewSuppliers(){
+  const items=prodItems();
+  const supMap=new Map();
+  for(const it of items){
+    for(const c of it.components||[]){
+      if(!supMap.has(c.supplier))supMap.set(c.supplier,{supplier:c.supplier,items:[],totalMonthlyCost:0});
+      const o=supMap.get(c.supplier);
+      o.items.push({product:it.name,component:c.component,qty:c.qty,unit_price:c.unit_price,line_cost:c.line_cost});
+      o.totalMonthlyCost+=c.line_cost*(it.est_monthly_qty||0);
+    }
+  }
+  const list=[...supMap.values()].sort((a,b)=>b.totalMonthlyCost-a.totalMonthlyCost);
+  let h='<div class="card"><h3>供应商供货分布 <span class="sub">按 7 款产品合计 BOM 采购金额（预估月用量）排序</span></h3>'
+    +'<div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
+    +'<th>供应商</th><th style="text-align:right">供货组件数</th><th style="text-align:right">月采购额(估算)</th>'
+    +'<th style="text-align:right">占比</th><th>覆盖产品</th></tr></thead><tbody>';
+  const total=list.reduce((a,d)=>a+d.totalMonthlyCost,0);
+  for(const s of list){
+    const prods=[...new Set(s.items.map(i=>i.product))];
+    h+=`<tr><td><b>${esc(s.supplier)}</b></td><td style="text-align:right">${s.items.length}</td>`
+      +`<td style="text-align:right">${fmoney(s.totalMonthlyCost)}</td>`
+      +`<td style="text-align:right;color:${total>0&&s.totalMonthlyCost/total>0.3?'#f54a45':'#1e9e62'}">${total>0?fpct(s.totalMonthlyCost/total*100):'—'}</td>`
+      +`<td style="color:var(--ink3);font-size:11.5px">${prods.map(esc).join('、')}</td></tr>`;
+  }
+  h+=`<tr style="font-weight:600;background:var(--accent-weak,#eef3fd)"><td>合计</td><td style="text-align:right">${list.reduce((a,d)=>a+d.items.length,0)}</td>`
+    +`<td style="text-align:right">${fmoney(total)}</td><td style="text-align:right">100.00%</td><td></td></tr>`;
+  h+='</tbody></table></div>'
+    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px">💡 月采购额 = 该供应商在各产品 BOM 中的单价 × 用量 × 月销量 · 仅含最低报价口径。占比 > 30% 的供应商需关注单点依赖风险。</div></div>';
+  return h;
+}
+
 /* ---------- 财务报表（总览 / 利润表 / 平台利润 / 科目余额 / 资产负债） ---------- */
 const FIN_TYPE_LABEL={asset:'资产',liability:'负债',equity:'权益',income:'收入',expense:'成本费用'};
 const FIN_TYPE_ORDER=[['asset','资产类'],['liability','负债类'],['equity','权益类'],['income','收入类'],['expense','成本费用类']];
@@ -1417,6 +1611,11 @@ function renderDashboard(c){
     ['总退款',tot.refund,fmtCny(tot.refund),'c-red'],
     ['平均ROI',tot.roi,tot.roi!=null?tot.roi.toFixed(2):'—','c-green']
   ];
+  // 毛利率（产品 BOM 测算）— 仅当有产品快照时显示
+  const pm=prodMonths();
+  if(pm&&pm.overallMarginRate!=null){
+    kpis.push(['综合毛利率',pm.overallMarginRate,(pm.overallMarginRate||0).toFixed(2)+'%',(pm.overallMarginRate||0)>=90?'c-green':'c-blue']);
+  }
   const kpiHtml=kpis.map(([name,,val,cls])=>`<div class="dkpi"><div class="k">${name}</div><div class="v ${cls}">${val}</div></div>`).join('');
   c.innerHTML=`
   <div class="filterbar no-print">
@@ -2185,7 +2384,7 @@ function renderDataMgr(c){
 /* ---------- 路由 ---------- */
 window.switchView=function(v){curView=v;curPeriod=null;render();};
 const bindNav=(id,v)=>{const b=$('#'+id);if(b)b.onclick=()=>switchView(v);};
-bindNav('navReport','daily');bindNav('navFinance','finance');bindNav('navArchive','archive');bindNav('navData','data');bindNav('navEntry','data');
+bindNav('navReport','daily');bindNav('navFinance','finance');bindNav('navProduct','product');bindNav('navArchive','archive');bindNav('navData','data');bindNav('navEntry','data');
 window.addEventListener('resize',()=>{
   if(['daily','weekly','monthly','yearly'].includes(curView)){
     const list=periodsOf(curView);
