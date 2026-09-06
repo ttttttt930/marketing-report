@@ -1085,7 +1085,8 @@ function renderProducts(c){
       {name:'单瓶成本',values:items.map(i=>i.unit_cost),color:'#e8790a'},
       {name:'单瓶毛利',values:items.map(i=>i.margin),color:'#22a06b'}
     ],'cny');
-    renderDonut($('#prodLineDonut'), items.reduce((m,i)=>{if(i.product_line)m[i.product_line]=(m[i.product_line]||0)+i.monthly_revenue;return m;},{}),'产品线收入占比');
+    const lineAgg = items.reduce((m,i)=>{if(i.product_line)m[i.product_line]=(m[i.product_line]||0)+i.monthly_revenue;return m;},{});
+    renderDonut($('#prodLineDonut'), Object.keys(lineAgg).map(k=>({plat:k, gmv:lineAgg[k]})),'产品线收入占比');
   }
 }
 
