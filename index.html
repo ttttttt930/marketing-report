@@ -1123,8 +1123,8 @@ function prodViewOverview(){
 
   if(p.promoPeriod){
     h+='<div class="kpi-note" style="font-size:12px;color:var(--ink3);margin-top:6px;line-height:1.7">'
-      +`📊 推广分摊口径：逐日 <b>总推广支出 ÷ 当日总销量</b>。${p.promoPeriod} 完整月实测 推广 ¥${fmoney(p.monthlyPromoTotal||0)} ÷ 销量 ${p.promoWindowSales||0} 瓶 = <b>单瓶 ¥${promoPerUnit.toFixed(2)}</b>；`
-      +`月推广分摊按预估月销量 ${totalEstQty} 瓶滚动为 ¥${fmoney(scaledPromo)}（实际月销量约 ${p.promoWindowSales||0} 瓶，故月度口径偏保守）。</div>`;
+      +`📊 推广分摊口径：逐日 <b>总推广支出 ÷ 当日总销量</b>。${p.promoPeriod} 完整月实测 推广 ${fmoney(p.monthlyPromoTotal||0)} ÷ 销量 ${p.promoWindowSales||0} 瓶 = <b>单瓶 ${fmoney(promoPerUnit)}</b>；`
+      +`月推广分摊按预估月销量 ${totalEstQty} 瓶滚动为 ${fmoney(scaledPromo)}（实际月销量约 ${p.promoWindowSales||0} 瓶，故月度口径偏保守）。</div>`;
   }
 
   h+='<div class="duo-grid">'
