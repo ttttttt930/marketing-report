@@ -83,6 +83,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans G
 .kpi .val{font-size:28px;font-weight:700;margin:6px 0 4px;letter-spacing:-.8px;font-variant-numeric:tabular-nums;line-height:1.2}
 .kpi .kpi-name{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px}
 .kpi .kpi-desc{font-size:11.5px;color:var(--ink3);line-height:1.5}
+.dkpi .kpi-desc{font-size:11px;color:var(--ink3);line-height:1.5;font-weight:400;margin-top:2px}
 .kpi .cmp{font-size:11px;color:var(--ink3);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 
 .chart-box{width:100%;position:relative}
@@ -279,7 +280,7 @@ function dispName(col){return DISP_NAMES[col]||col;}
 const KPI_DESC={'总收入':'成交总额 Gross Merchandise Volume，全渠道成交额汇总','总支出':'营销总花费 = 推广消耗 + 退款金额','净收入':'GMV 扣除推广和退款后的实际利润','总退款':'全渠道退款订单金额合计','总推广支出':'各平台广告投放总花费','总销量':'成交订单总件数'};
 let snapshots=[];
 let curView='dashboard';  // dashboard|daily|weekly|monthly|yearly|archive|data|finance
-let finTab='income';      // income|platform|balance
+let finTab='overview';    // overview|income|platform|balance|assets
 let dashTime='month';     // 仪表盘时间筛选：today|week|month|year|all
 let dashPlatform='全部';   // 仪表盘平台筛选
 const DONUT_COLORS=['#3370ff','#ff9f2b','#e0577b','#2ec5ad','#8f6bf2','#f5b93d'];
@@ -1039,80 +1040,322 @@ function render(){
   renderReportView(c);
 }
 
-/* ---------- 财务报表（利润表 / 平台利润 / 科目余额表） ---------- */
+/* ---------- 财务报表（总览 / 利润表 / 平台利润 / 科目余额 / 资产负债） ---------- */
 const FIN_TYPE_LABEL={asset:'资产',liability:'负债',equity:'权益',income:'收入',expense:'成本费用'};
+const FIN_TYPE_ORDER=[['asset','资产类'],['liability','负债类'],['equity','权益类'],['income','收入类'],['expense','成本费用类']];
 function fmoney(v){return '¥'+(v||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fnum(v){return (v||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fpct(v){return (v||0).toFixed(2)+'%';}
 function finPeriodLabel(p){const[y,m]=p.split('-');return `${y} 年 ${+m} 月`;}
+function finMShort(p){return (+p.split('-')[1])+'月';}
+function finIsRows(){return (state.finance&&state.finance.incomeStatement)||[];}
+function finPlatRows(){return (state.finance&&state.finance.platformProfit)||[];}
+function finTbRows(){return (state.finance&&state.finance.trialBalance)||[];}
+/* 科目余额聚合：exact=true 精确编码，否则按前缀匹配（视图内仅叶子科目） */
+function tbBal(prefix,exact){const tb=finTbRows();return tb.filter(r=>exact?r.account_code===prefix:r.account_code.startsWith(prefix)).reduce((a,r)=>a+(r.balance||0),0);}
+function tbSumType(type){return finTbRows().filter(r=>r.type===type).reduce((a,r)=>a+(r.balance||0),0);}
+/* 营销运营口径（来自营销日报 state.rows，与会计口径并列展示） */
+function finOps(){
+  let gmv=0,refund=0,promo=0;
+  for(const r of state.rows){const v=r.values||{};gmv+=v['总收入']||0;refund+=v['总退款']||0;promo+=v['总推广支出']||0;}
+  return {gmv,refund,promo,
+    refundRate:gmv>0?refund/gmv*100:0,
+    promoRate:gmv>0?promo/gmv*100:0,
+    net:gmv-refund-promo};
+}
+/* 环比：涨红跌绿（中国习惯） */
+function finDelta(cur,prev){
+  if(prev==null||!isFinite(prev)||Math.abs(prev)<0.005)return '<span style="color:var(--ink3)">—</span>';
+  const d=(cur-prev)/Math.abs(prev)*100,up=d>=0;
+  return `<span style="color:${up?'#f54a45':'#1e9e62'};font-weight:600">${up?'↗':'↘'} ${Math.abs(d).toFixed(2)}%</span>`;
+}
+/* 平台利润聚合：period=null 全期，否则指定月 */
+function finPlatAgg(period){
+  const m=new Map();
+  for(const r of finPlatRows()){
+    if(period&&r.period!==period)continue;
+    if(!m.has(r.platform))m.set(r.platform,{plat:r.platform,income:0,promo:0,other:0});
+    const o=m.get(r.platform);o.income+=r.income||0;o.promo+=r.promo||0;o.other+=r.other_selling||0;
+  }
+  const list=[...m.values()].map(d=>({plat:d.plat,income:d.income,promo:d.promo,other:d.other,
+    gmv:d.income,spend:d.promo,roi:d.promo>0?d.income/d.promo:null}));
+  list.sort((a,b)=>b.income-a.income);
+  return list;
+}
+function finLatestPeriod(){const is=finIsRows();return is.length?is[is.length-1].period:null;}
+
 function renderFinance(c){
   const fin=state.finance;
   if(!fin||!fin.incomeStatement||!fin.incomeStatement.length){
     c.innerHTML='<div class="card"><div class="empty"><div class="big">💰</div><p>暂无财务数据（凭证为空）</p><p style="font-size:12px;color:var(--ink3)">在项目目录运行 build-finance.js：初始化科目表并把营销日报自动生成为月度凭证</p></div></div>';
     return;
   }
-  const tabs=[['income','📈 月度利润表'],['platform','🛒 平台利润'],['balance','⚖️ 科目余额表']];
+  const tabs=[['overview','📊 财务总览'],['income','📈 月度利润表'],['platform','🛒 平台利润'],['balance','⚖️ 科目余额表'],['assets','🏦 资产负债表']];
   let html='<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px">'
-    +'<div class="bar-title" style="margin:0">财务报表 <span class="sub">口径：会计确认（收入已扣退款）</span></div>'
+    +'<div class="bar-title" style="margin:0">财务报表 <span class="sub">口径：会计确认（收入已扣退款）· 小企业会计准则</span></div>'
     +'<div class="seg no-print" style="margin-left:auto">'+tabs.map(t=>`<a class="${finTab===t[0]?'on':''}" onclick="finTab='${t[0]}';render()">${t[1]}</a>`).join('')+'</div></div>'
-    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px;line-height:1.7">⚠️ 「会计净利润」≠ 仪表盘的「运营净收入」：会计口径还包含全部销售费用/管理费用/财务费用/成本税金。营销日报当前仅自动生成收入、退款、推广费分录，其余费用待录入后利润表自动完整。</div></div>';
+    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px;line-height:1.7">⚠️ 「会计净利润」≠ 仪表盘的「运营净收入」：会计口径还包含全部销售费用/管理费用/财务费用/成本税金。营销日报当前仅自动生成收入、退款、推广费分录，其余费用待手工凭证录入后利润表自动完整。金额单位：元，均保留两位小数。</div></div>';
 
-  if(finTab==='income'){
-    const rows=fin.incomeStatement;
-    const tot=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
-    const td=(v,neg)=>`<td style="text-align:right;${v<0?'color:#f54a45':''}">${fmoney(v)}</td>`;
-    html+='<div class="card"><h3>月度利润表 <span class="sub">小企业会计准则口径 · 单位：元</span></h3><div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
-      +'<th>期间</th><th style="text-align:right">主营业务收入</th><th style="text-align:right">主营业务成本</th><th style="text-align:right">税金及附加</th>'
-      +'<th style="text-align:right">销售费用</th><th style="text-align:right">管理费用</th><th style="text-align:right">财务费用</th>'
-      +'<th style="text-align:right">营业利润</th><th style="text-align:right">营业外收支</th><th style="text-align:right">净利润</th></tr></thead><tbody>';
-    for(const m of rows){
-      const nonOp=(m.nonOpIn||0)-(m.nonOpExp||0);
-      html+=`<tr><td>${finPeriodLabel(m.period)}</td><td style="text-align:right">${fmoney(m.rev)}</td>`
-        +`<td style="text-align:right">${fmoney(m.cost)}</td><td style="text-align:right">${fmoney(m.tax)}</td>`
-        +`<td style="text-align:right">${fmoney(m.selling)}</td><td style="text-align:right">${fmoney(m.admin)}</td><td style="text-align:right">${fmoney(m.finance)}</td>`
-        +`<td style="text-align:right">${fmoney(m.opProfit)}</td><td style="text-align:right">${fmoney(nonOp)}</td>`
-        +`<td style="text-align:right;font-weight:600;${m.net<0?'color:#f54a45':''}">${fmoney(m.net)}</td></tr>`;
-    }
-    html+='<tr style="font-weight:600;background:var(--accent-weak,#eef3fd)"><td>合计</td>'
-      +`<td style="text-align:right">${fmoney(tot('rev'))}</td><td style="text-align:right">${fmoney(tot('cost'))}</td><td style="text-align:right">${fmoney(tot('tax'))}</td>`
-      +`<td style="text-align:right">${fmoney(tot('selling'))}</td><td style="text-align:right">${fmoney(tot('admin'))}</td><td style="text-align:right">${fmoney(tot('finance'))}</td>`
-      +`<td style="text-align:right">${fmoney(tot('opProfit'))}</td><td style="text-align:right">${fmoney(tot('nonOpIn')-tot('nonOpExp'))}</td>`
-      +`<td style="text-align:right">${fmoney(tot('net'))}</td></tr></tbody></table></div></div>`;
-  }
+  if(finTab==='overview') html+=finViewOverview();
+  if(finTab==='income')   html+=finViewIncome();
+  if(finTab==='platform') html+=finViewPlatform();
+  if(finTab==='balance')  html+=finViewBalance();
+  if(finTab==='assets')   html+=finViewAssets();
 
-  if(finTab==='platform'){
-    const pp=fin.platformProfit||[];
-    const periods=[...new Set(pp.map(p=>p.period))].sort().reverse();
-    for(const per of periods){
-      const rows=pp.filter(p=>p.period===per).sort((a,b)=>b.income-a.income);
-      const si=rows.reduce((a,r)=>a+r.income,0),sp=rows.reduce((a,r)=>a+r.promo,0);
-      html+='<div class="card" style="margin-bottom:14px"><h3>'+finPeriodLabel(per)+' 平台利润 <span class="sub">会计确认口径</span></h3><div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
-        +'<th>平台</th><th style="text-align:right">主营业务收入</th><th style="text-align:right">推广费</th><th style="text-align:right">其他销售费</th><th style="text-align:right">投放 ROI</th></tr></thead><tbody>';
-      for(const r of rows){
-        const roi=r.promo>0&&r.income>0?r.income/r.promo:null;
-        html+=`<tr><td><span class="pdot" style="background:#3370ff"></span>${esc(r.platform)}</td>`
-          +`<td style="text-align:right">${fmoney(r.income)}</td><td style="text-align:right">${fmoney(r.promo)}</td>`
-          +`<td style="text-align:right">${fmoney(r.other_selling)}</td>`
-          +`<td style="text-align:right">${roi?roi.toFixed(2):'—'}</td></tr>`;
-      }
-      html+=`<tr style="font-weight:600;background:var(--accent-weak,#eef3fd)"><td>合计</td><td style="text-align:right">${fmoney(si)}</td><td style="text-align:right">${fmoney(sp)}</td><td></td><td style="text-align:right">${sp>0?(si/sp).toFixed(2):'—'}</td></tr></tbody></table></div></div>`;
-    }
-  }
-
-  if(finTab==='balance'){
-    const tb=fin.trialBalance||[];
-    const dTot=tb.reduce((a,r)=>a+(r.debit_total||0),0),cTot=tb.reduce((a,r)=>a+(r.credit_total||0),0);
-    html+='<div class="card"><h3>科目余额表（试算平衡） <span class="sub">仅已确认凭证 · 单位：元</span></h3>'
-      +`<div style="font-size:12px;margin-bottom:10px">借方发生合计 <b>${fmoney(dTot)}</b> · 贷方发生合计 <b>${fmoney(cTot)}</b> · ${Math.abs(dTot-cTot)<0.01?'<span class="roi-up">✅ 借贷平衡</span>':'<span class="roi-down">❌ 借贷不平衡</span>'}</div>`
-      +'<div style="overflow-x:auto"><table class="rt sumtable"><thead><tr><th>编码</th><th>科目名称</th><th>类别</th><th style="text-align:right">借方发生</th><th style="text-align:right">贷方发生</th><th style="text-align:right">余额</th></tr></thead><tbody>';
-    for(const r of tb){
-      html+=`<tr><td style="color:var(--ink3)">${esc(r.account_code)}</td><td>${esc(r.name)}</td><td>${FIN_TYPE_LABEL[r.type]||r.type}</td>`
-        +`<td style="text-align:right">${r.debit_total?fmoney(r.debit_total):'—'}</td><td style="text-align:right">${r.credit_total?fmoney(r.credit_total):'—'}</td>`
-        +`<td style="text-align:right">${r.balance?fmoney(r.balance):'—'}</td></tr>`;
-    }
-    html+='</tbody></table></div></div>';
-  }
   c.innerHTML=html;
+  /* 图表在 innerHTML 落地后渲染 */
+  if(finTab==='overview'){
+    const is=finIsRows();
+    const labels=is.map(m=>finMShort(m.period));
+    renderChart($('#finTrend'),labels,[
+      {name:'营业收入',values:is.map(m=>m.rev),color:'#3370ff'},
+      {name:'净利润',values:is.map(m=>m.net),color:'#22a06b'}
+    ],'cny');
+    renderDonut($('#finDonut'),finPlatAgg(null).map(d=>({plat:d.plat,gmv:d.income})),'总收入');
+    renderPlatChart($('#finPlatChart'),finPlatAgg(null));
+  }
+  if(finTab==='income'){
+    const is=finIsRows();
+    renderChart($('#finIncChart'),is.map(m=>finMShort(m.period)),[
+      {name:'营业收入',values:is.map(m=>m.rev),color:'#3370ff'},
+      {name:'净利润',values:is.map(m=>m.net),color:'#22a06b'}
+    ],'cny');
+  }
+  if(finTab==='platform'){
+    const per=finPlatMode==='latest'?finLatestPeriod():null;
+    const list=finPlatAgg(per);
+    renderDonut($('#finPlatDonut'),list.map(d=>({plat:d.plat,gmv:d.income})),'收入');
+    renderPlatChart($('#finPlatBar'),list);
+  }
 }
 
+/* ===== 财务总览 ===== */
+function finViewOverview(){
+  const is=finIsRows();
+  const sum=k=>is.reduce((a,r)=>a+(r[k]||0),0);
+  const rev=sum('rev'),net=sum('net'),selling=sum('selling');
+  const promoAll=finPlatRows().reduce((a,r)=>a+(r.promo||0),0);
+  const margin=rev>0?net/rev*100:0;
+  const promoRate=rev>0?promoAll/rev*100:0;
+  const latest=is[is.length-1],prev=is[is.length-2]||null;
+  const tb=finTbRows();
+  const dTot=tb.reduce((a,r)=>a+(r.debit_total||0),0),cTot=tb.reduce((a,r)=>a+(r.credit_total||0),0);
+  const balanced=Math.abs(dTot-cTot)<0.01;
+  const ops=finOps();
+  const latestPer=finLatestPeriod();
+  const latestPlat=finPlatAgg(latestPer);
+  const allPlat=finPlatAgg(null);
+  const topInc=latestPlat[0];
+  const topRoi=allPlat.filter(d=>d.roi!=null).sort((a,b)=>b.roi-a.roi)[0];
+
+  const kpi=[
+    ['累计营业收入',fmoney(rev),'c-blue','会计口径（已扣退款）'],
+    ['累计净利润',fmoney(net),net<0?'c-red':'c-blue','收入−推广费（其余费用待入账）'],
+    ['累计净利率',fpct(margin),margin>=0?'c-green':'c-red','净利润 ÷ 营业收入'],
+    ['累计推广费',fmoney(promoAll),'c-red','占收入 '+fpct(promoRate)],
+    [finPeriodLabel(latest.period)+'净利润',fmoney(latest.net),latest.net<0?'c-red':'c-blue',prev?('环比 '+finDelta(latest.net,prev.net).replace(/<[^>]+>/g,'')):'首月'],
+    ['试算平衡',balanced?'✅ 平衡':'❌ 不平衡',balanced?'c-green':'c-red',is.length+' 个会计期间 · 借贷各 '+fnum(dTot)]
+  ];
+  let h='<div class="dkpis">'+kpi.map(([n,v,cls,desc])=>
+    `<div class="dkpi"><div class="k">${n}</div><div class="v ${cls}">${v}</div><div class="kpi-desc" style="margin-top:4px">${desc}</div></div>`).join('')+'</div>';
+
+  h+='<div class="duo-grid">'
+    +'<div class="card"><div class="bar-title">营收与净利润趋势 <span class="sub">月度 · 会计口径</span></div><div class="chart-box" id="finTrend"></div></div>'
+    +'<div class="card"><div class="bar-title">平台收入占比 <span class="sub">全期累计 · 会计收入</span></div><div class="donut-wrap" id="finDonut"></div></div>'
+    +'</div>';
+
+  h+='<div class="card"><div class="bar-title">各平台投放效率 <span class="sub">柱：会计收入 / 推广费 · 橙线：ROI（收入÷推广费）</span></div><div class="chart-box" id="finPlatChart"></div></div>';
+
+  /* 自动洞察 */
+  const ins=[];
+  ins.push(`📈 累计营业收入 <b>${fmoney(rev)}</b>，累计净利润 <b>${fmoney(net)}</b>，净利率 <b>${fpct(margin)}</b>；推广费占收入 <b>${fpct(promoRate)}</b>。`);
+  if(prev){
+    ins.push(`🗓️ ${finPeriodLabel(latest.period)}营业收入 ${fmoney(latest.rev)}，环比 ${finDelta(latest.rev,prev.rev)}；净利润 ${fmoney(latest.net)}，环比 ${finDelta(latest.net,prev.net)}。`);
+  }
+  if(topInc)ins.push(`🏆 ${finPeriodLabel(latestPer)}收入最高平台：<b>${esc(topInc.plat)}</b> ${fmoney(topInc.income)}，占当月 ${fpct(latestPer?topInc.income/latestPlat.reduce((a,d)=>a+d.income,0)*100:0)}。`);
+  if(topRoi)ins.push(`🎯 全期投放 ROI 最高：<b>${esc(topRoi.plat)}</b>（ROI ${topRoi.roi.toFixed(2)}）；全期平均 ROI ${promoAll>0?(rev/promoAll).toFixed(2):'—'}。`);
+  ins.push(`🔄 运营口径参考：累计 GMV ${fmoney(ops.gmv)}，退款率 <b>${fpct(ops.refundRate)}</b>，运营净收入（GMV−退款−推广费）${fmoney(ops.net)}。`);
+  ins.push(`⚖️ 试算平衡：借方发生 ${fmoney(dTot)}，贷方发生 ${fmoney(cTot)}，${balanced?'<span class="roi-up">✅ 借贷平衡</span>':'<span class="roi-down">❌ 不平衡，请检查凭证</span>'}。`);
+  ins.push(`⚠️ 当前仅收入/退款/推广费自动入账，<b>主营业务成本、管理费用、税金尚未录入</b>，净利润为营销口径、偏高；补录手工凭证后报表自动完整。`);
+  h+='<div class="card"><div class="bar-title">财务洞察 <span class="sub">自动生成</span></div>'
+    +'<ul style="margin:0;padding-left:18px;line-height:2;font-size:13px">'+ins.map(s=>`<li>${s}</li>`).join('')+'</ul></div>';
+  return h;
+}
+
+/* ===== 月度利润表 ===== */
+function finViewIncome(){
+  const rows=finIsRows();
+  const tot=k=>rows.reduce((a,r)=>a+(r[k]||0),0);
+  let h='<div class="card"><div class="bar-title">月度利润趋势 <span class="sub">营业收入 vs 净利润</span></div><div class="chart-box" id="finIncChart"></div></div>';
+  h+='<div class="card"><h3>月度利润表 <span class="sub">小企业会计准则口径 · 单位：元</span></h3><div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
+    +'<th>期间</th><th style="text-align:right">主营业务收入</th><th style="text-align:right">收入环比</th><th style="text-align:right">主营业务成本</th><th style="text-align:right">税金及附加</th>'
+    +'<th style="text-align:right">销售费用</th><th style="text-align:right">管理费用</th><th style="text-align:right">财务费用</th>'
+    +'<th style="text-align:right">营业利润</th><th style="text-align:right">营业外收支</th><th style="text-align:right">净利润</th><th style="text-align:right">净利率</th></tr></thead><tbody>';
+  rows.forEach((m,i)=>{
+    const nonOp=(m.nonOpIn||0)-(m.nonOpExp||0);
+    const prev=i>0?rows[i-1]:null;
+    const nm=m.rev>0?m.net/m.rev*100:0;
+    h+=`<tr><td>${finPeriodLabel(m.period)}</td><td style="text-align:right">${fmoney(m.rev)}</td>`
+      +`<td style="text-align:right">${finDelta(m.rev,prev?prev.rev:null)}</td>`
+      +`<td style="text-align:right">${fmoney(m.cost)}</td><td style="text-align:right">${fmoney(m.tax)}</td>`
+      +`<td style="text-align:right">${fmoney(m.selling)}</td><td style="text-align:right">${fmoney(m.admin)}</td><td style="text-align:right">${fmoney(m.finance)}</td>`
+      +`<td style="text-align:right">${fmoney(m.opProfit)}</td><td style="text-align:right">${fmoney(nonOp)}</td>`
+      +`<td style="text-align:right;font-weight:600;${m.net<0?'color:#f54a45':''}">${fmoney(m.net)}</td>`
+      +`<td style="text-align:right;font-weight:600;color:${nm>=0?'#1e9e62':'#f54a45'}">${fpct(nm)}</td></tr>`;
+  });
+  const totNet=tot('net'),totRev=tot('rev'),totNm=totRev>0?totNet/totRev*100:0;
+  h+='<tr style="font-weight:600;background:var(--accent-weak,#eef3fd)"><td>合计</td>'
+    +`<td style="text-align:right">${fmoney(totRev)}</td><td></td>`
+    +`<td style="text-align:right">${fmoney(tot('cost'))}</td><td style="text-align:right">${fmoney(tot('tax'))}</td>`
+    +`<td style="text-align:right">${fmoney(tot('selling'))}</td><td style="text-align:right">${fmoney(tot('admin'))}</td><td style="text-align:right">${fmoney(tot('finance'))}</td>`
+    +`<td style="text-align:right">${fmoney(tot('opProfit'))}</td><td style="text-align:right">${fmoney(tot('nonOpIn')-tot('nonOpExp'))}</td>`
+    +`<td style="text-align:right">${fmoney(totNet)}</td>`
+    +`<td style="text-align:right">${fpct(totNm)}</td></tr></tbody></table></div>`
+    +'<div style="font-size:11.5px;color:var(--ink3);margin-top:10px;line-height:1.7">净利率 = 净利润 ÷ 主营业务收入；收入环比按中国习惯涨红跌绿。成本/管理费用等列当前为 0.00，待手工凭证入账后自动填充。</div></div>';
+  return h;
+}
+
+/* ===== 平台利润 ===== */
+let finPlatMode='latest';
+function finViewPlatform(){
+  const pp=finPlatRows();
+  const periods=[...new Set(pp.map(p=>p.period))].sort().reverse();
+  let h='<div class="card no-print" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+    +'<div class="bar-title" style="margin:0">期间</div>'
+    +'<div class="seg"><a class="'+(finPlatMode==='latest'?'on':'')+'" onclick="finPlatMode=\'latest\';render()">最新期间</a>'
+    +'<a class="'+(finPlatMode==='all'?'on':'')+'" onclick="finPlatMode=\'all\';render()">全部期间</a></div>'
+    +'<span class="sub">最新期间：'+(periods[0]?finPeriodLabel(periods[0]):'—')+' · 共 '+periods.length+' 期</span></div></div>';
+
+  const per=finPlatMode==='latest'?finLatestPeriod():null;
+  const list=finPlatAgg(per);
+  const avgRoi=list.reduce((a,d)=>a+d.promo,0)>0?list.reduce((a,d)=>a+d.income,0)/list.reduce((a,d)=>a+d.promo,0):null;
+  const totalInc=list.reduce((a,d)=>a+d.income,0);
+
+  h+='<div class="duo-grid">'
+    +'<div class="card"><div class="bar-title">各平台收入与推广费 <span class="sub">'+(per?finPeriodLabel(per):'全期累计')+' · 橙线为 ROI</span></div><div class="chart-box" id="finPlatBar"></div></div>'
+    +'<div class="card"><div class="bar-title">平台收入占比 <span class="sub">'+(per?finPeriodLabel(per):'全期累计')+'</span></div><div class="donut-wrap" id="finPlatDonut"></div></div>'
+    +'</div>';
+
+  if(finPlatMode==='all'){
+    /* 全期汇总表 + 按月卡片 */
+    h+=finPlatTable('全期累计',list,avgRoi,totalInc);
+    for(const per2 of periods){
+      const r2=finPlatAgg(per2);
+      const si=r2.reduce((a,d)=>a+d.income,0),sp=r2.reduce((a,d)=>a+d.promo,0);
+      h+=finPlatTable(finPeriodLabel(per2),r2,sp>0?si/sp:null,si);
+    }
+  }else{
+    h+=finPlatTable(finPeriodLabel(per),list,avgRoi,totalInc);
+  }
+  h+='<div class="dash-foot">口径：主营业务收入为会计确认口径（GMV 已扣退款）；ROI = 收入 ÷ 推广费，达到当期平均 ROI 标绿，低于标红；其他销售费（达人/内容/物流等）待手工凭证入账。</div>';
+  return h;
+}
+function finPlatTable(title,rows,avgRoi,totalInc){
+  let h='<div class="card" style="margin-bottom:14px"><h3>'+esc(title)+' 平台利润 <span class="sub">会计确认口径 · 单位：元</span></h3>'
+    +'<div style="overflow-x:auto"><table class="rt sumtable"><thead><tr>'
+    +'<th>平台</th><th style="text-align:right">主营业务收入</th><th>收入占比</th><th style="text-align:right">推广费</th><th style="text-align:right">其他销售费</th><th style="text-align:right">投放 ROI</th></tr></thead><tbody>';
+  for(const r of rows){
+    const pct=totalInc>0?r.income/totalInc*100:0;
+    const rc=r.roi!=null&&avgRoi!=null?(r.roi>=avgRoi?'roi-up':'roi-down'):'';
+    h+=`<tr><td><span class="pdot" style="background:${chsColor(r.plat)}"></span>${esc(r.plat)}</td>`
+      +`<td style="text-align:right">${fmoney(r.income)}</td>`
+      +`<td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:7px;background:#f0f1f5;border-radius:4px;overflow:hidden"><div style="width:${pct.toFixed(2)}%;height:100%;background:${chsColor(r.plat)};border-radius:4px"></div></div><span style="font-size:11.5px;color:var(--ink3);font-variant-numeric:tabular-nums">${fpct(pct)}</span></div></td>`
+      +`<td style="text-align:right">${fmoney(r.promo)}</td>`
+      +`<td style="text-align:right">${fmoney(r.other)}</td>`
+      +`<td style="text-align:right" class="${rc}">${r.roi!=null?r.roi.toFixed(2):'—'}</td></tr>`;
+  }
+  const si=rows.reduce((a,d)=>a+d.income,0),sp=rows.reduce((a,d)=>a+d.promo,0),so=rows.reduce((a,d)=>a+d.other,0);
+  h+=`<tr style="font-weight:600;background:var(--accent-weak,#eef3fd)"><td>合计</td><td style="text-align:right">${fmoney(si)}</td><td></td>`
+    +`<td style="text-align:right">${fmoney(sp)}</td><td style="text-align:right">${fmoney(so)}</td>`
+    +`<td style="text-align:right" class="${sp>0?'roi-up':''}">${sp>0?(si/sp).toFixed(2):'—'}</td></tr>`
+    +'</tbody></table></div></div>';
+  return h;
+}
+
+/* ===== 科目余额表（分组） ===== */
+function finViewBalance(){
+  const tb=finTbRows();
+  const dTot=tb.reduce((a,r)=>a+(r.debit_total||0),0),cTot=tb.reduce((a,r)=>a+(r.credit_total||0),0);
+  const balanced=Math.abs(dTot-cTot)<0.01;
+  let h='<div class="card"><h3>科目余额表（试算平衡） <span class="sub">仅已确认凭证 · 单位：元</span></h3>'
+    +`<div style="font-size:12.5px;margin-bottom:12px;line-height:1.9">借方发生合计 <b>${fmoney(dTot)}</b> · 贷方发生合计 <b>${fmoney(cTot)}</b> · ${balanced?'<span class="roi-up">✅ 借贷平衡</span>':'<span class="roi-down">❌ 借贷不平衡</span>'}`
+    +` &nbsp;|&nbsp; 表内为各科目 <b>累计发生额</b>，余额方向按科目性质自动轧差。</div><div style="overflow-x:auto">`;
+  for(const [type,label] of FIN_TYPE_ORDER){
+    const grp=tb.filter(r=>r.type===type);
+    if(!grp.length)continue;
+    const dSum=grp.reduce((a,r)=>a+(r.debit_total||0),0),cSum=grp.reduce((a,r)=>a+(r.credit_total||0),0),bSum=grp.reduce((a,r)=>a+(r.balance||0),0);
+    h+='<table class="rt sumtable" style="margin-bottom:16px"><thead><tr>'
+      +'<th style="width:110px">编码</th><th>科目名称</th><th style="text-align:right">借方发生</th><th style="text-align:right">贷方发生</th><th style="text-align:right">余额</th></tr></thead>'
+      +`<tr style="background:#f6f7fa;font-weight:600"><td colspan="5">${label}（${grp.length} 个科目）</td></tr>`
+      +'<tbody>';
+    for(const r of grp){
+      h+=`<tr><td style="color:var(--ink3)">${esc(r.account_code)}</td><td>${esc(r.name)}</td>`
+        +`<td style="text-align:right">${r.debit_total?fmoney(r.debit_total):'—'}</td><td style="text-align:right">${r.credit_total?fmoney(r.credit_total):'—'}</td>`
+        +`<td style="text-align:right;font-variant-numeric:tabular-nums">${r.balance?fmoney(r.balance):'—'}</td></tr>`;
+    }
+    h+=`<tr style="font-weight:600;background:var(--accent-weak,#eef3fd)"><td colspan="2">${label}小计</td>`
+      +`<td style="text-align:right">${fmoney(dSum)}</td><td style="text-align:right">${fmoney(cSum)}</td>`
+      +`<td style="text-align:right">${fmoney(bSum)}</td></tr></tbody></table>`;
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ===== 资产负债表（前端自动归集） ===== */
+function finViewAssets(){
+  /* 资产端 */
+  const cash=tbBal('1001',true)+tbBal('1002')+tbBal('1012');
+  const ar=tbBal('1122',true),prepay=tbBal('1123',true),otherRecv=tbBal('1223',true);
+  const inventory=tbBal('1405',true),fixed=tbBal('1601',true),deprec=tbBal('1602',true),defer=tbBal('1801',true);
+  const assetsTotal=cash+ar+prepay+otherRecv+inventory+fixed-deprec+defer;
+  /* 负债端 */
+  const ap=tbBal('2202',true),salary=tbBal('2211'),tax=tbBal('2221'),otherPay=tbBal('2241',true);
+  const liabTotal=ap+salary+tax+otherPay;
+  /* 权益端：本年利润 = 4103 余额 + 收入费用净发生额（模拟期末结转） */
+  const incBal=tbSumType('income'),expBal=tbSumType('expense');
+  const currentYearProfit=tbBal('4103',true)+incBal-expBal;
+  const capital=tbBal('4001',true),surplus=tbBal('4101',true),distribute=tbBal('4104',true);
+  const equityTotal=capital+surplus+distribute+currentYearProfit;
+  const diff=assetsTotal-liabTotal-equityTotal;
+  const balanced=Math.abs(diff)<0.05;
+
+  const row=(name,v,opt)=>`<tr><td>${name}${opt&&opt.note?` <span style="color:var(--ink3);font-size:11px">${opt.note}</span>`:''}</td>`
+    +`<td style="text-align:right;font-variant-numeric:tabular-nums;${opt&&opt.bold?'font-weight:600;background:var(--accent-weak,#eef3fd)':''}">${fmoney(v)}</td></tr>`;
+  let h='<div class="card" style="margin-bottom:14px"><div style="font-size:12.5px;line-height:1.9">📋 本表依据科目余额自动归集（小企业会计准则简表）；<b>本年利润</b>含收入、费用科目的期末自动结转额，正式月结后由结转凭证过账。</div></div>';
+  h+='<div class="duo-grid">';
+  h+='<div class="card"><h3>资产 <span class="sub">期末余额 · 元</span></h3><div style="overflow-x:auto"><table class="rt sumtable"><tbody>'
+    +row('货币资金',cash,{note:'库存现金+银行存款+平台待结算'})
+    +row('应收账款',ar)
+    +row('预付账款',prepay)
+    +row('其他应收款',otherRecv)
+    +row('库存商品',inventory,{note:'香水成品/原料'})
+    +row('固定资产',fixed,{note:'摄影设备/电脑'})
+    +row('减：累计折旧',-deprec)
+    +row('长期待摊费用',defer)
+    +row('资产总计',assetsTotal,{bold:true})
+    +'</tbody></table></div></div>';
+  h+='<div class="card"><h3>负债和所有者权益 <span class="sub">期末余额 · 元</span></h3><div style="overflow-x:auto"><table class="rt sumtable"><tbody>'
+    +row('应付账款',ap,{note:'供应商/达人未结款'})
+    +row('应付职工薪酬',salary)
+    +row('应交税费',tax)
+    +row('其他应付款',otherPay)
+    +row('负债合计',liabTotal,{bold:true})
+    +row('实收资本',capital)
+    +row('盈余公积',surplus)
+    +row('本年利润',currentYearProfit,{note:'收入费用自动结转'})
+    +row('利润分配',distribute)
+    +row('所有者权益合计',equityTotal,{bold:true})
+    +row('负债和所有者权益总计',liabTotal+equityTotal,{bold:true})
+    +'</tbody></table></div></div>';
+  h+='</div>';
+  h+='<div class="card"><div style="font-size:13px;line-height:2">'+(balanced
+      ?'<span class="roi-up">✅ 资产负债表平衡</span>：资产总计 '+fmoney(assetsTotal)+' ＝ 负债 '+fmoney(liabTotal)+' ＋ 所有者权益 '+fmoney(equityTotal)
+      :'<span class="roi-down">❌ 不平衡，差额 '+fmoney(diff)+'</span>：请检查凭证是否全部确认、科目余额方向是否正确')
+    +'</div><div style="font-size:11.5px;color:var(--ink3);margin-top:8px;line-height:1.8">⚠️ 数据完整性提示：当前自动凭证仅覆盖收入/退款/推广费，<b>股东注资、银行提现、采购成本、固定资产、管理费用</b>等业务尚未录入；因此货币资金中的银行存款为推广费支付净额、库存商品等暂为 0.00。补录手工凭证（凭证录入功能下一阶段上线）后，本表自动还原为完整资产负债表。</div></div>';
+  return h;
+}
+
+/* ---------- 仪表盘（飞书风格） ---------- */
 /* ---------- 仪表盘（飞书风格） ---------- */
 const CH_BASES=['收入','推广支出','退款','净收入','销量'];
 function channelsOf(){return ['淘宝','抖音','拼多多','小红书','tiktok'].filter(ch=>state.columns.includes(ch+'收入'));}
@@ -1292,7 +1535,7 @@ function renderPlatChart(el,data){
 }
 function chsColor(plat){const chs=channelsOf();return DONUT_COLORS[Math.max(0,chs.indexOf(plat))%DONUT_COLORS.length];}
 /* 渠道销售占比环形图 */
-function renderDonut(el,data){
+function renderDonut(el,data,centerLabel){
   if(!el)return;
   const total=data.reduce((a,d)=>a+d.gmv,0);
   if(!data.length||total<=0){el.innerHTML='<div class="empty" style="padding:40px">无销售数据</div>';return;}
@@ -1308,7 +1551,7 @@ function renderDonut(el,data){
   const legend=data.map(d=>`<div class="li"><span class="dot" style="background:${chsColor(d.plat)}"></span>${esc(d.plat)}
     <span class="amt">¥${d.gmv.toLocaleString('zh-CN',{maximumFractionDigits:0})}</span><span class="pct">${(d.gmv/total*100).toFixed(2)}%</span></div>`).join('');
   el.innerHTML=`<div class="donut-box"><svg viewBox="0 0 ${S} ${S}" width="${S}" height="${S}">${segs}</svg>
-    <div class="donut-center"><div class="dc1">总GMV</div><div class="dc2">¥${total.toLocaleString('zh-CN',{maximumFractionDigits:0})}</div></div></div>
+    <div class="donut-center"><div class="dc1">${centerLabel||"总GMV"}</div><div class="dc2">¥${total.toLocaleString('zh-CN',{maximumFractionDigits:0})}</div></div></div>
     <div class="dlegend">${legend}</div>`;
 }
 
