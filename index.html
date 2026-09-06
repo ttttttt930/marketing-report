@@ -669,6 +669,7 @@ function loadAll(){
     state.lastImportAt=(emb.updatedAt?new Date(emb.updatedAt).toLocaleString('zh-CN')+'（自动）':'');
     state.dataUpdatedAt=emb.updatedAt||0;
     state.finance=emb.finance||null;
+    state.products=emb.products||null;
     chartMetric=state.columns.includes('总收入')?'总收入':state.columns[0];
     saveState();
     return;
@@ -677,6 +678,8 @@ function loadAll(){
       state.lastImportAt=d.lastImportAt||'';
       state.dataUpdatedAt=d.dataUpdatedAt||0;state.autoArchived=d.autoArchived||null;state.targets=d.targets||{};
       state.config=c||{};for(const col of state.columns)if(!state.config[col])state.config[col]=guessCfg(col);
+      // 内嵌快照中的财务 / 产品快照始终合并（即便本机 localStorage 数据更新未写入也保留最新快照）
+      if(emb){state.finance=emb.finance||null;state.products=emb.products||null;}
       chartMetric=state.columns[0];return;}
   genDemo();saveState();
 }
