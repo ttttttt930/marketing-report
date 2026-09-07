@@ -2519,56 +2519,76 @@ function renderDashboard(c){
   const promoPerUnit=hasProd&&pm?pm.promoPerUnitTotal:null;
 
   /* ---------- Hero 速览（月营收/月真实净利/现金流/库存周转）---------- */
-  /* 月营收：本月（last 月）总 GMV */
+  /* 月营收：本月（last 月）总 GMV —— 注意"是否整月"判断，处理部分月 */
   const lastMonth=curRows.length?curRows[0].date.slice(0,7):null;
-  const monthGmv=lastMonth?state.rows.filter(r=>r.date.slice(0,7)===lastMonth).reduce((a,r)=>a+(+r.values['总收入']||0),0):0;
+  const monthRows=lastMonth?state.rows.filter(r=>r.date.slice(0,7)===lastMonth):[];
+  const monthDaysSoFar=monthRows.length;
+  const monthDaysTotal=lastMonth?(function(){
+    const [yr,mo]=lastMonth.split('-').map(Number);
+    return new Date(yr,mo,0).getDate();
+  })():30;
+  const isPartialMonth=!!lastMonth&&monthDaysSoFar>0&&monthDaysSoFar<monthDaysTotal;
+  const projFactor=isPartialMonth&&monthDaysSoFar>0?(monthDaysTotal/monthDaysSoFar):1;
+  const monthLbl=isPartialMonth?(monthLabel(lastMonth)+'至今'):monthLabel(lastMonth);
+  const monthGmv=monthRows.reduce((a,r)=>a+(+r.values['总收入']||0),0);
+  const monthPromo=monthRows.reduce((a,r)=>a+(+r.values['总推广支出']||0),0);
+  const monthRefund=monthRows.reduce((a,r)=>a+(+r.values['总退款']||0),0);
+  const monthQty=monthRows.reduce((a,r)=>a+(+r.values['总销量']||0),0);
+  /* 同期对比：上月同期（lastMonth 头 monthDaysSoFar 天），避免 5 天当 30 天比 */
   const prevMonth=lastMonth?prevMonthKey(lastMonth):null;
-  const prevMonthGmv=prevMonth?state.rows.filter(r=>r.date.slice(0,7)===prevMonth).reduce((a,r)=>a+(+r.values['总收入']||0),0):0;
-  /* 月真实净利：月营收 − 月物料成本 − 月推广支出 */
-  const monthPromo=lastMonth?state.rows.filter(r=>r.date.slice(0,7)===lastMonth).reduce((a,r)=>a+(+r.values['总推广支出']||0),0):0;
-  const monthRefund=lastMonth?state.rows.filter(r=>r.date.slice(0,7)===lastMonth).reduce((a,r)=>a+(+r.values['总退款']||0),0):0;
-  const monthMatCost=pm?(pm.monthlyCost||0):0;
-  const monthRealProfit=monthGmv-monthMatCost-monthPromo;
-  /* 现金流：净利 - 退款（简化为"现金回款"指标，估算） */
+  const prevMonthSameRows=prevMonth?state.rows.filter(r=>r.date.slice(0,7)===prevMonth).slice(0,monthDaysSoFar):[];
+  const prevMonthGmv=prevMonthSameRows.reduce((a,r)=>a+(+r.values['总收入']||0),0);
+  const prevMonthQty=prevMonthSameRows.reduce((a,r)=>a+(+r.values['总销量']||0),0);
+  /* 整月预估（按当前日均年化） */
+  const monthProjectedGmv=isPartialMonth?+(monthGmv*projFactor).toFixed(2):monthGmv;
+  const monthProjectedQty=isPartialMonth?Math.round(monthQty*projFactor):monthQty;
+  /* 物料成本：完整月用 pm.monthlyCost；部分月按已过天数折算（更公平） */
+  const monthMatCostFull=pm?(pm.monthlyCost||0):0;
+  const monthMatCostPartial=isPartialMonth?+(monthMatCostFull/projFactor).toFixed(2):monthMatCostFull;
+  const monthRealProfit=isPartialMonth?(monthGmv-monthMatCostPartial-monthPromo):(monthGmv-monthMatCostFull-monthPromo);
+  const monthRealProfitProjected=isPartialMonth?+(monthProjectedGmv-monthMatCostFull-monthPromo*projFactor).toFixed(2):monthRealProfit;
+  /* 现金流：净利回款口径 */
   const cashFlow=monthGmv-monthPromo-monthRefund;
-  /* 库存周转：当月销量 / 预估安全库存；值越大周转越快 */
+  const cashFlowProjected=isPartialMonth?+(monthProjectedGmv-monthPromo*projFactor-monthRefund*projFactor).toFixed(2):cashFlow;
+  /* 库存周转：当月销量 / 预估安全库存；部分月用"整月预估销量"换算 */
   const totalEstQty=prodItems().reduce((a,i)=>a+(+i.est_monthly_qty||0),0)||1;
-  const curMonthSales=curRows.reduce((a,r)=>a+(+r.values['总销量']||0),0);
-  const turnover=totalEstQty>0?+(curMonthSales/totalEstQty*100).toFixed(1):null;
+  const curMonthSales=monthQty;
+  const turnoverReal=totalEstQty>0?+(curMonthSales/totalEstQty*100).toFixed(1):null;
+  const turnover=isPartialMonth&&totalEstQty>0?+(monthProjectedQty/totalEstQty*100).toFixed(1):turnoverReal;
   const turnoverLbl=turnover==null?'—':turnover>=80?'高':turnover>=40?'中':'低';
 
   const heroHtml=`<div class="hero-strip">
     <div class="hero hero-primary">
       <div class="h-emoji">💰</div>
       <div class="h-body">
-        <div class="h-k">月营收</div>
+        <div class="h-k">月营收${isPartialMonth?'<span class="est-tag" style="margin-left:4px">截至 '+(monthDaysSoFar)+'/'+monthDaysTotal+'天</span>':''}</div>
         <div class="h-v">${monthGmv>0?fmtCny(monthGmv):'—'}</div>
-        <div class="h-sub">${lastMonth?monthLabel(lastMonth):''}${prevMonthGmv?' · '+((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)+'% vs 上月':''}</div>
+        <div class="h-sub">${esc(monthLbl)}${prevMonthGmv?' · <span style="color:'+(((monthGmv-prevMonthGmv)/prevMonthGmv*100)>=0?'#1e9e62':'#f54a45')+'">'+(((monthGmv-prevMonthGmv)/prevMonthGmv*100)>=0?'+':'')+((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)+'% vs 上月同期</span>':''}${isPartialMonth?'<br/>整月预估 <span style="font-weight:600">'+fmtCny(monthProjectedGmv)+'</span> <span class="est-tag">估算</span>':''}</div>
       </div>
       ${deltaChip(monthGmv,prevMonthGmv,false)}
     </div>
     <div class="hero">
       <div class="h-emoji">✨</div>
       <div class="h-body">
-        <div class="h-k">月真实净利</div>
+        <div class="h-k">真实净利${isPartialMonth?'<span class="est-tag" style="margin-left:4px">'+monthDaysSoFar+'天</span>':''}</div>
         <div class="h-v" style="color:${monthRealProfit>=0?'#1e9e62':'#f54a45'}">${fmtCny(monthRealProfit)}</div>
-        <div class="h-sub">营收 − 物料 ${fmtCny(monthMatCost)} − 推广 ${fmtCny(monthPromo)}</div>
+        <div class="h-sub">营收 ${fmtCny(monthGmv)}${isPartialMonth?'（按已过 '+monthDaysSoFar+' 天）':''} − 物料 ${fmtCny(isPartialMonth?monthMatCostPartial:monthMatCostFull)} − 推广 ${fmtCny(monthPromo)}${isPartialMonth?'<br/>整月预估 <span style="font-weight:600;color:'+(monthRealProfitProjected>=0?'#1e9e62':'#f54a45')+'">'+fmtCny(monthRealProfitProjected)+'</span> <span class="est-tag">估算</span>':''}</div>
       </div>
     </div>
     <div class="hero">
       <div class="h-emoji">💵</div>
       <div class="h-body">
-        <div class="h-k">现金流（估算）</div>
+        <div class="h-k">现金回款<span class="est-tag" style="margin-left:4px">估算</span></div>
         <div class="h-v">${cashFlow>0?fmtCny(cashFlow):'—'}</div>
-        <div class="h-sub">GMV − 推广 − 退款</div>
+        <div class="h-sub">GMV − 推广 − 退款${isPartialMonth?'（'+monthDaysSoFar+' 天）<br/>整月预估 <span style="font-weight:600">'+fmtCny(cashFlowProjected)+'</span> <span class="est-tag">估算</span>':''}</div>
       </div>
     </div>
     <div class="hero">
       <div class="h-emoji">🔄</div>
       <div class="h-body">
-        <div class="h-k">库存周转</div>
+        <div class="h-k">库存周转<span class="est-tag" style="margin-left:4px">估算</span></div>
         <div class="h-v">${turnover!=null?turnover+'%':'—'}</div>
-        <div class="h-sub">月销量 ÷ 预估安全库存 · ${turnoverLbl}</div>
+        <div class="h-sub">${isPartialMonth?('已过 '+monthDaysSoFar+'/'+monthDaysTotal+' 天，整月预估销量 '+monthProjectedQty+' 瓶 ÷ 安全库存 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl):('当月销量 '+monthQty+' 瓶 ÷ 预估安全库存 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl)}${isPartialMonth?'<br/>同期同口径: 5 天实际周转 '+turnoverReal+'%（无年化）':''}</div>
       </div>
     </div>
   </div>`;
@@ -2688,8 +2708,19 @@ function renderDashboard(c){
   const insights=[];
   if(realRoi>=3)insights.push({lvl:'good',icon:'🌟',t:`真实 ROI <b>${realRoi.toFixed(2)}</b> 表现优秀，可考虑同渠道加投或扩 SKU`});
   else if(realRoi<1.5)insights.push({lvl:'danger',icon:'🚨',t:`真实 ROI 仅 <b>${realRoi.toFixed(2)}</b>，低于安全线 1.5——推广效率待优化`});
-  if(revGrowth>=20)insights.push({lvl:'good',icon:'📈',t:`月营收同比增长 <b>+${revGrowth.toFixed(1)}%</b>，处于加速通道`});
-  else if(revGrowth<=-10)insights.push({lvl:'danger',icon:'📉',t:`月营收同比 <b>${revGrowth.toFixed(1)}%</b> 负增长，建议排查原因（淡季？促销缺失？）`});
+  /* partial month 专用：把"营收对比"明确为环比同期 (vs 上月同期)，避免跨窗口误判 */
+  if(isPartialMonth){
+    if(prevMonthGmv>0&&monthGmv>=prevMonthGmv){
+      insights.push({lvl:'good',icon:'📈',t:`营收对比上月同期 <b>+${((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)}%</b>（${monthDaysSoFar}/${monthDaysTotal} 天对 ${monthDaysSoFar}/${prevMonth?new Date(+prevMonth.split('-')[0],+prevMonth.split('-')[1],0).getDate():30} 天，整月预估 <b>${fmtCny(monthProjectedGmv)}</b>）`});
+    }else if(prevMonthGmv>0){
+      insights.push({lvl:'warn',icon:'📉',t:`营收对比上月同期 <b>${((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)}%</b>（${monthDaysSoFar} 天同期比较，整月预估 <b>${fmtCny(monthProjectedGmv)}</b>）`});
+    }else{
+      insights.push({lvl:'warn',icon:'📊',t:`本月已过 <b>${monthDaysSoFar}/${monthDaysTotal}</b> 天，整月预估营收 <b>${fmtCny(monthProjectedGmv)}</b> <span class="est-tag">估算</span>`});
+    }
+  }else{
+    if(revGrowth>=20)insights.push({lvl:'good',icon:'📈',t:`月营收同比增长 <b>+${revGrowth.toFixed(1)}%</b>，处于加速通道`});
+    else if(revGrowth<=-10)insights.push({lvl:'danger',icon:'📉',t:`月营收同比 <b>${revGrowth.toFixed(1)}%</b> 负增长，建议排查原因（淡季？促销缺失？）`});
+  }
   if(refundRate>15)insights.push({lvl:'warn',icon:'🔄',t:`退款率 <b>${refundRate.toFixed(1)}%</b> 偏高，需关注品控/物流/详情页描述`});
   if(hhi>2500)insights.push({lvl:'warn',icon:'⚖️',t:`渠道集中度 <b>HHI ${hhi.toFixed(0)}</b> 偏高（>2500），建议拓展第二渠道降低单点风险`});
   if(turnover!=null&&turnover<40)insights.push({lvl:'warn',icon:'📦',t:`库存周转 <b>${turnover}%</b> 偏低，存在滞销库存风险`});
@@ -2700,11 +2731,15 @@ function renderDashboard(c){
   if(pm&&pm.overallMarginRate>=90){
     insights.push({lvl:'good',icon:'💎',t:`综合毛利率 <b>${pm.overallMarginRate.toFixed(1)}%</b>，定价合理/成本控制良好`});
   }
-  /* 真实净利洞察 */
-  if(monthRealProfit<0){
+  /* 真实净利洞察（partial 月按"按已过天数换算物料"得出的是实际已发生数；亏损提醒要看整月预估） */
+  if(!isPartialMonth&&monthRealProfit<0){
     insights.push({lvl:'danger',icon:'💔',t:`月真实净利 <b style="color:#f54a45">${fmtCny(monthRealProfit)}</b>，扣除物料+推广后亏损，需立即优化`});
-  }else if(monthRealProfit>0&&realRoi<1){
+  }else if(!isPartialMonth&&monthRealProfit>0&&realRoi<1){
     insights.push({lvl:'warn',icon:'⚖️',t:`月真实净利为正但真实 ROI < 1，意味着每 1 元投入仅换回 ${realRoi.toFixed(2)} 元，建议重新评估投产模型`});
+  }else if(isPartialMonth&&monthRealProfitProjected<0){
+    insights.push({lvl:'danger',icon:'💔',t:`整月预估真实净利 <b style="color:#f54a45">${fmtCny(monthRealProfitProjected)}</b>，按当前日均推算月底会亏损，需控费提量`});
+  }else if(isPartialMonth&&monthRealProfitProjected>0){
+    insights.push({lvl:'good',icon:'✨',t:`整月预估真实净利 <b style="color:#1e9e62">${fmtCny(monthRealProfitProjected)}</b>，当前 ${monthDaysSoFar} 天实际 ${fmtCny(monthRealProfit)} <span class="est-tag">估算</span>`});
   }
   const insightsHtml=insights.length?`<div class="card">
     <div class="bar-title">💡 智能经营洞察 <span class="sub">${insights.length} 条建议</span></div>
@@ -2761,7 +2796,7 @@ function renderDashboard(c){
   </div>
   ${heroHtml}
   ${kpiGroups}
-  <div class="section-h">📊 财务核心 <span class="section-sub">${DASH_TIME_LABEL[dashTime]}${dashPlatform!=='全部'?' · '+dashPlatform:''}${prevTot?' · vs 上期':''}</span></div>
+  <div class="section-h">📊 财务核心 <span class="section-sub">${(dashTime==='month'&&isPartialMonth)?monthLbl:DASH_TIME_LABEL[dashTime]}${dashPlatform!=='全部'?' · '+dashPlatform:''}${prevTot?' · vs 上期':''}</span></div>
   <div class="dkpis">${finKpiHtml}</div>
   ${prodKpiHtml?`<div class="section-h">🧱 产品真实成本 <span class="section-sub">物料+推广 完整成本口径</span></div>${prodKpiHtml}`:''}
   ${radarHtml}
@@ -2788,7 +2823,7 @@ function renderDashboard(c){
       <th>平台</th><th style="text-align:right">支出金额</th><th style="text-align:right">GMV</th><th style="text-align:right">销量</th><th style="text-align:right">退款金额</th><th style="text-align:right">净利</th><th style="text-align:right">ROI</th>
     </tr></thead><tbody id="sumBody"></tbody></table></div>
   </div>
-  <div class="dash-foot">口径：月营收=本月总GMV · 月真实净利=GMV−物料成本−推广支出 · 现金流=GMV−推广−退款（估算） · 库存周转=月销量÷预估安全库存 · 真实ROI = GMV ÷ (单瓶物料×销量 + 推广支出) · 平均 ROI = GMV ÷ 推广消耗</div>`;
+  <div class="dash-foot">口径：当本月未成型时（即 isPartialMonth），月营收/真实净利/库存周转等指标按"已过 ${monthDaysSoFar}/${monthDaysTotal} 天"口径展示，并提供整月预估（按当前日均年化，带「估算」标签）；环比对比统一使用"上月同期"（同期同长度日）。物料成本按已过天数折算，推广/退款按 5 天数据直接计算。</div>`;
   // 筛选器交互
   c.querySelectorAll('#segTime a').forEach(a=>a.onclick=()=>{dashTime=a.dataset.t;render();});
   c.querySelectorAll('#segPlat a').forEach(a=>a.onclick=()=>{dashPlatform=a.dataset.p;render();});
