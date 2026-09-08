@@ -415,11 +415,11 @@ table.plain input[type=checkbox]{accent-color:var(--accent)}
 </div>
 
 <div class="modnav no-print" id="modnav" style="margin:14px 26px 0;max-width:1180px;margin-left:auto;margin-right:auto">
-  <a data-mod="dashboard" class="${MOD_VIEW==='dashboard'?'on':''}"><span class="ico">🎯</span>经营驾驶舱</a>
-  <a data-mod="channels" class="${MOD_VIEW==='channels'?'on':''}"><span class="ico">🛒</span>渠道经营</a>
-  <a data-mod="product" class="${MOD_VIEW==='product'?'on':''}"><span class="ico">📦</span>产品经营</a>
-  <a data-mod="supply" class="${MOD_VIEW==='supply'?'on':''}"><span class="ico">🏭</span>供应链</a>
-  <a data-mod="finance" class="${MOD_VIEW==='finance'?'on':''}"><span class="ico">💰</span>财务全景</a>
+  <a data-mod="dashboard"><span class="ico">🎯</span>经营驾驶舱</a>
+  <a data-mod="channels"><span class="ico">🛒</span>渠道经营</a>
+  <a data-mod="product"><span class="ico">📦</span>产品经营</a>
+  <a data-mod="supply"><span class="ico">🏭</span>供应链</a>
+  <a data-mod="finance"><span class="ico">💰</span>财务全景</a>
 </div>
 <div class="content" id="content" data-page-node-id="FazU8CgMSgpUXhs8nbjqQj" style="padding-top:8px"></div>
 <div class="tooltip" id="tooltip" data-page-node-id="KRZWFCHzLZzZJltVyTgvyy"></div>
@@ -1410,11 +1410,11 @@ function prodViewOverview(){
     : null;
 
   const kpi=[
-    ['月总收入（估算）',fmoney(p.monthlyRevenue),'c-blue',`7 款产品 · ${totalEstQty} 瓶/月`],
+    ['月总收入（估算）',fmoney(p.monthlyRevenue),'c-blue',`${items.length} 款产品 · ${totalEstQty} 瓶/月`],
     ['月物料成本',fmoney(p.monthlyCost),'c-red','BOM × 各组件最低报价（不含试香）'],
     ['月推广分摊',fmoney(scaledPromo),'c-orange',`单瓶 ¥${promoPerUnit.toFixed(2)} × 预估月销 ${totalEstQty} 瓶`],
     ['月真实毛利',fmoney(p.monthlyRevenue - p.monthlyCost - scaledPromo),realMarginRate>=70?'c-green':(realMarginRate>=55?'c-blue':'c-red'),'收入 − 物料 − 推广分摊'],
-    ['综合毛利率',fpct(p.overallMarginRate),p.overallMarginRate>=90?'c-green':'c-blue','物料成本 ÷ 售价'],
+    ['物料毛利率',fpct(p.overallMarginRate),p.overallMarginRate>=80?'c-green':'c-blue','仅扣物料成本，未扣推广/退款'],
     ['综合真实毛利率',realMarginRate!=null?fpct(realMarginRate):'—',realMarginRate!=null&&realMarginRate>=70?'c-green':(realMarginRate>=55?'c-blue':'c-red'),'(售价−物料−单瓶推广) ÷ 售价'],
   ];
   let h='<div class="dkpis">'+kpi.map(([n,v,cls,desc])=>
@@ -1427,7 +1427,7 @@ function prodViewOverview(){
   }
 
   h+='<div class="duo-grid">'
-    +'<div class="card"><div class="bar-title">7 款产品物料/推广/真实毛利 <span class="sub">物料=不含试香 BOM · 推广=逐日总推广÷当日总销量 · 真实毛利=收入−物料−单瓶推广</span></div><div class="chart-box" id="prodCostBar"></div></div>'
+    +'<div class="card"><div class="bar-title">各产品物料/推广/真实毛利 <span class="sub">物料=不含试香 BOM · 推广=逐日总推广÷当日总销量 · 真实毛利=收入−物料−单瓶推广</span></div><div class="chart-box" id="prodCostBar"></div></div>'
     +'<div class="card"><div class="bar-title">产品线收入占比 <span class="sub">按产品线分组月收入</span></div><div class="donut-wrap" id="prodLineDonut"></div></div>'
     +'</div>';
 
@@ -1458,7 +1458,7 @@ function prodViewOverview(){
   const cheapestUnit=items.filter(i=>i.unit_cost>0).sort((a,b)=>a.unit_cost-b.unit_cost)[0];
   const dearestUnit=[...items].sort((a,b)=>b.unit_cost-a.unit_cost)[0];
   const ins=[];
-  ins.push(`📦 7 款产品 <b>${items.reduce((a,i)=>a+(i.est_monthly_qty||0),0)}</b> 瓶/月，预估月收入 <b>${fmoney(sumRev)}</b>，物料成本 <b>${fmoney(sumCost)}</b>，月毛利 <b>${fmoney(sumGp)}</b>，综合毛利率 <b>${fpct(p.overallMarginRate)}</b>。`);
+  ins.push(`📦 ${items.length} 款产品 <b>${items.reduce((a,i)=>a+(i.est_monthly_qty||0),0)}</b> 瓶/月，预估月收入 <b>${fmoney(sumRev)}</b>，物料成本 <b>${fmoney(sumCost)}</b>，月毛利 <b>${fmoney(sumGp)}</b>，综合毛利率 <b>${fpct(p.overallMarginRate)}</b>。`);
   if(cheapestUnit)ins.push(`💡 单瓶成本最低：<b>${esc(cheapestUnit.name)}</b> ¥${cheapestUnit.unit_cost.toFixed(2)}（毛利率 ${(cheapestUnit.margin_rate||0).toFixed(2)}%）；成本最高：<b>${esc(dearestUnit.name)}</b> ¥${dearestUnit.unit_cost.toFixed(2)}（${(dearestUnit.margin_rate||0).toFixed(2)}%）。`);
   if(sortedByMargin[0])ins.push(`🏆 毛利率冠军：<b>${esc(sortedByMargin[0].name)}</b> ${(sortedByMargin[0].margin_rate||0).toFixed(2)}%；毛利率最低：<b>${esc(sortedByMargin[sortedByMargin.length-1].name)}</b> ${(sortedByMargin[sortedByMargin.length-1].margin_rate||0).toFixed(2)}%。`);
   h+='<div class="card"><div class="bar-title">产品成本洞察 <span class="sub">自动生成</span></div>'
@@ -1681,7 +1681,7 @@ function channelHealthScore(ch){
   const gmv=sumCol(rows,ch+'收入'),spend=sumCol(rows,ch+'推广支出'),
         refund=sumCol(rows,ch+'退款'),qty=sumCol(rows,ch+'销量'),
         totGmv=sumCol(rows,'总收入');
-  const roi=spend>0&&gmv>0?gmv/spend:0;
+  const roi=spend>0&&gmv>0?gmv/spend:null;
   const refundRatio=gmv>0?refund/gmv*100:0;
   const share=totGmv>0?gmv/totGmv*100:0;
   /* 增长率：与上期相比 */
@@ -1692,7 +1692,7 @@ function channelHealthScore(ch){
     growth=pGmv>0?(gmv-pGmv)/pGmv*100:0;
   }
   /* 各维度分（0-25） */
-  const roiScore=Math.min(25,Math.max(0,roi*8));           // ROI 1.0=8 分，3.0=24
+  const roiScore=roi==null?15:Math.min(25,Math.max(0,roi*8));           // 无投放(自然流量)给中性 15 分；ROI 1.0=8 分，3.0=24
   const refundScore=Math.min(25,Math.max(0,25-refundRatio*1.2)); // 退款率 0%=25，20%=1
   const shareScore=Math.min(25,share*0.7);                 // 占比 35% = 24.5
   const growthScore=Math.min(25,Math.max(0,12.5+growth*0.4)); // 0% 增长 = 12.5，30% = 24.5
@@ -1731,7 +1731,7 @@ function renderChannelOps(c){
         <div class="ch-row"><span>GMV</span><b>${fmtCny(h.gmv)}</b></div>
         <div class="ch-row"><span>推广消耗</span><b style="color:#f54a45">${fmtCny(h.spend)}</b></div>
         <div class="ch-row"><span>销量</span><b>${h.qty.toLocaleString('zh-CN')} 瓶</b></div>
-        <div class="ch-row"><span>ROI</span><b style="color:${h.roi>=2?'#1e9e62':h.roi>=1?'#3370ff':'#f54a45'}">${h.roi!=null?h.roi.toFixed(2):'—'}</b></div>
+        <div class="ch-row"><span>ROI</span><b style="color:${h.roi==null?'var(--ink3)':h.roi>=2?'#1e9e62':h.roi>=1?'#3370ff':'#f54a45'}">${h.roi!=null?h.roi.toFixed(2):'—'}</b></div>
         <div class="ch-foot"><span>占比 ${h.share.toFixed(1)}%</span><span>退款率 ${h.refundRatio.toFixed(1)}%</span></div>
       </div>`;
     }).join('')
@@ -1870,7 +1870,7 @@ function renderSupplyChain(c){
   const supShi=supplierArr.reduce((a,s)=>a+(s.count/supplierTot*100)*(s.count/supplierTot*100),0); // HHI 类似
   const supLevel=supShi>2500?'高':supShi>1800?'中':'低';
 
-  /* BOM 成本瀑布：取第一个 SKU 演示（其它 SKU 可点选切换） */
+  /* BOM 成本瀑布：取 BOM 组件数最多的一款 SKU 做演示（单 SKU 拆解，暂无切换交互） */
   /* items 里 unit_cost = BOM 最低价合计，这里拆解为每个组件的金额（用 quoteStats.component 最低价 × 用量） */
   const itemsWithBom=items.filter(it=>it.bom&&Array.isArray(it.bom)&&it.bom.length);
   /* 选 BOM 最丰富的 SKU 演示（组件数最多） */
@@ -1988,10 +1988,10 @@ function renderSupplyChain(c){
   const order={red:0,yellow:1,green:2};
   invAlerts.sort((a,b)=>order[a.lvl]-order[b.lvl]);
   const invHtml=`<div class="card">
-    <div class="bar-title">📦 库存预警 <span class="sub">${items.length} 款产品 · 按「预估月销量 × 2 安全库存」判断</span>
+    <div class="bar-title">📦 库存覆盖模拟 <span class="sub">⚠️ 演示：暂无真实库存数据，按「预估月销 ×2」假设库存模拟，不代表真实库存</span>
       <span style="margin-left:auto"><span class="est-tag">估算</span></span></div>
     ${invAlerts.map(a=>`<div class="inv-alert ${a.lvl}"><span class="ia">${a.icon}</span><span>${esc(a.txt)}</span></div>`).join('')}
-    <div class="hint">当前快照未提供实时库存字段，按"预估月销量 × 2 = 假设安全库存"演示。接入 ERP/WMS 后可替换为真实库存数据。</div>
+    <div class="hint">当前快照未提供实时库存字段，以上为按“预估月销量 × 2 = 假设库存”的模拟结果，不代表真实库存，请勿据此补货决策。接入 ERP/WMS 或手工录入库存后自动升级为真实预警。</div>
   </div>`;
 
   c.innerHTML=`
@@ -2117,7 +2117,7 @@ function finViewOverview(){
 
   const kpi=[
     ['累计营业收入',fmoney(rev),'c-blue','会计口径（已扣退款）'],
-    ['累计净利润',fmoney(net),net<0?'c-red':'c-blue','收入−推广费（其余费用待入账）'],
+    ['累计净利润（营销口径）',fmoney(net),net<0?'c-red':'c-blue','仅扣推广费/退款；货款·工资·税费待凭证入账'],
     ['累计净利率',fpct(margin),margin>=0?'c-green':'c-red','净利润 ÷ 营业收入'],
     ['累计推广费',fmoney(promoAll),'c-red','占收入 '+fpct(promoRate)],
     [finPeriodLabel(latest.period)+'净利润',fmoney(latest.net),latest.net<0?'c-red':'c-blue',prev?('环比 '+finDelta(latest.net,prev.net).replace(/<[^>]+>/g,'')):'首月'],
@@ -2520,7 +2520,7 @@ function renderDashboard(c){
 
   /* ---------- Hero 速览（月营收/月真实净利/现金流/库存周转）---------- */
   /* 月营收：本月（last 月）总 GMV —— 注意"是否整月"判断，处理部分月 */
-  const lastMonth=curRows.length?curRows[0].date.slice(0,7):null;
+  const lastMonth=state.rows.length?state.rows[state.rows.length-1].date.slice(0,7):null;
   const monthRows=lastMonth?state.rows.filter(r=>r.date.slice(0,7)===lastMonth):[];
   const monthDaysSoFar=monthRows.length;
   const monthDaysTotal=lastMonth?(function(){
@@ -2586,9 +2586,9 @@ function renderDashboard(c){
     <div class="hero">
       <div class="h-emoji">🔄</div>
       <div class="h-body">
-        <div class="h-k">库存周转<span class="est-tag" style="margin-left:4px">估算</span></div>
+        <div class="h-k">销售达成率<span class="est-tag" style="margin-left:4px">估算</span></div>
         <div class="h-v">${turnover!=null?turnover+'%':'—'}</div>
-        <div class="h-sub">${isPartialMonth?('已过 '+monthDaysSoFar+'/'+monthDaysTotal+' 天，整月预估销量 '+monthProjectedQty+' 瓶 ÷ 安全库存 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl):('当月销量 '+monthQty+' 瓶 ÷ 预估安全库存 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl)}${isPartialMonth?'<br/>同期同口径: 5 天实际周转 '+turnoverReal+'%（无年化）':''}</div>
+        <div class="h-sub">${isPartialMonth?('已过 '+monthDaysSoFar+'/'+monthDaysTotal+' 天，整月预估销量 '+monthProjectedQty+' 瓶 ÷ 预估月销 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl):('当月销量 '+monthQty+' 瓶 ÷ 预估月销 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl)}${isPartialMonth?'<br/>同期同口径: 5 天实际周转 '+turnoverReal+'%（无年化）':''}</div>
       </div>
     </div>
   </div>`;
@@ -2600,8 +2600,8 @@ function renderDashboard(c){
   const revGrowth=prevMonthGmv?(monthGmv-prevMonthGmv)/prevMonthGmv*100:0;
   radarDims.push({n:'营收增长',v:revGrowth,score:Math.min(100,Math.max(0,50+revGrowth*2)),fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%',good:v=>v>=10});
   /* 真实 ROI */
-  const realRoi=rs&&rs.realRoi!=null?rs.realRoi:0;
-  radarDims.push({n:'真实ROI',v:realRoi,score:Math.min(100,realRoi*25),fmt:v=>v.toFixed(2),good:v=>v>=2});
+  const realRoi=(rs&&rs.realRoi!=null)?rs.realRoi:null;
+  radarDims.push({n:'真实ROI',v:realRoi==null?0:realRoi,score:realRoi==null?0:Math.min(100,realRoi*25),fmt:v=>realRoi==null?'未导入成本':v.toFixed(2),good:v=>v>=2});
   /* 退款控制 */
   const refundRate=tot.gmv>0?tot.refund/tot.gmv*100:0;
   radarDims.push({n:'退款控制',v:refundRate,score:Math.max(0,100-refundRate*4),fmt:v=>v.toFixed(1)+'%',good:v=>v<=10,invert:true});
@@ -2612,7 +2612,7 @@ function renderDashboard(c){
   radarDims.push({n:'渠道分散度',v:diversification,score:Math.round(diversification),fmt:v=>v.toFixed(0)+'分',good:v=>v>=60});
   /* 库存周转 */
   const turnoverScore=turnover!=null?Math.min(100,turnover*1.2):0;
-  radarDims.push({n:'库存周转',v:turnover!=null?turnover:0,score:Math.round(turnoverScore),fmt:v=>v.toFixed(1)+'%',good:v=>v>=80});
+  radarDims.push({n:'销售达成',v:turnover!=null?turnover:0,score:Math.round(turnoverScore),fmt:v=>v.toFixed(1)+'%',good:v=>v>=80});
 
   const overallHealth=Math.round(radarDims.reduce((a,d)=>a+d.score,0)/radarDims.length);
   const healthColor=overallHealth>=75?'#1e9e62':overallHealth>=55?'#3370ff':overallHealth>=35?'#ff8800':'#f54a45';
@@ -2699,15 +2699,13 @@ function renderDashboard(c){
       {n:'日均销量',v:monthDays>0?Math.round(tot.qty/monthDays).toLocaleString('zh-CN'):'—',c:'#3370ff'},
       {n:'平均 ROI',v:tot.roi!=null?tot.roi.toFixed(2):'—',c:tot.roi!=null&&tot.roi>=2?'#1e9e62':'#3370ff'}
     ])}</div><div>${kpiGroup('经营','⚙️',[
-      {n:'真实 ROI',v:rs&&rs.realRoi!=null?rs.realRoi.toFixed(2):'—',c:rs&&rs.realRoi>=2?'#1e9e62':'#f54a45'},
-      {n:'综合毛利率',v:pm&&pm.overallMarginRate!=null?pm.overallMarginRate.toFixed(1)+'%':'—',c:pm&&pm.overallMarginRate>=90?'#1e9e62':'#3370ff'},
-      {n:'库存周转',v:turnover!=null?turnover+'%':'—',c:turnover!=null&&turnover>=80?'#1e9e62':turnover!=null&&turnover>=40?'#ff8800':'#f54a45'}
+      {n:'真实 ROI',v:rs&&rs.realRoi!=null?rs.realRoi.toFixed(2):'—',c:rs&&rs.realRoi!=null?(rs.realRoi>=2?'#1e9e62':'#f54a45'):'var(--ink3)'},
+      {n:'物料毛利率',v:pm&&pm.overallMarginRate!=null?pm.overallMarginRate.toFixed(1)+'%':'—',c:pm&&pm.overallMarginRate>=80?'#1e9e62':'#3370ff'},
+      {n:'销售达成率',v:turnover!=null?turnover+'%':'—',c:turnover!=null&&turnover>=80?'#1e9e62':turnover!=null&&turnover>=40?'#ff8800':'#f54a45'}
     ])}</div></div>`;
 
   /* ---------- 智能经营洞察（自然语言） ---------- */
   const insights=[];
-  if(realRoi>=3)insights.push({lvl:'good',icon:'🌟',t:`真实 ROI <b>${realRoi.toFixed(2)}</b> 表现优秀，可考虑同渠道加投或扩 SKU`});
-  else if(realRoi<1.5)insights.push({lvl:'danger',icon:'🚨',t:`真实 ROI 仅 <b>${realRoi.toFixed(2)}</b>，低于安全线 1.5——推广效率待优化`});
   /* partial month 专用：把"营收对比"明确为环比同期 (vs 上月同期)，避免跨窗口误判 */
   if(isPartialMonth){
     if(prevMonthGmv>0&&monthGmv>=prevMonthGmv){
@@ -2721,20 +2719,19 @@ function renderDashboard(c){
     if(revGrowth>=20)insights.push({lvl:'good',icon:'📈',t:`月营收同比增长 <b>+${revGrowth.toFixed(1)}%</b>，处于加速通道`});
     else if(revGrowth<=-10)insights.push({lvl:'danger',icon:'📉',t:`月营收同比 <b>${revGrowth.toFixed(1)}%</b> 负增长，建议排查原因（淡季？促销缺失？）`});
   }
-  if(refundRate>15)insights.push({lvl:'warn',icon:'🔄',t:`退款率 <b>${refundRate.toFixed(1)}%</b> 偏高，需关注品控/物流/详情页描述`});
   if(hhi>2500)insights.push({lvl:'warn',icon:'⚖️',t:`渠道集中度 <b>HHI ${hhi.toFixed(0)}</b> 偏高（>2500），建议拓展第二渠道降低单点风险`});
-  if(turnover!=null&&turnover<40)insights.push({lvl:'warn',icon:'📦',t:`库存周转 <b>${turnover}%</b> 偏低，存在滞销库存风险`});
+  if(turnover!=null&&turnover<40)insights.push({lvl:'warn',icon:'📦',t:`销售达成率 <b>${turnover}%</b> 偏低，当月销量未达预估月销，关注动销节奏`});
   /* 单瓶物料与单瓶推广对比 */
   if(blendedU&&promoPerUnit&&promoPerUnit>blendedU*4){
     insights.push({lvl:'warn',icon:'💸',t:`推广分摊 ¥${promoPerUnit.toFixed(2)}/瓶 是物料 ¥${blendedU.toFixed(2)}/瓶 的 ${(promoPerUnit/blendedU).toFixed(1)} 倍，投放成本显著高于产品本身`});
   }
-  if(pm&&pm.overallMarginRate>=90){
-    insights.push({lvl:'good',icon:'💎',t:`综合毛利率 <b>${pm.overallMarginRate.toFixed(1)}%</b>，定价合理/成本控制良好`});
+  if(pm&&pm.overallMarginRate>=80){
+    insights.push({lvl:'good',icon:'💎',t:`物料毛利率 <b>${pm.overallMarginRate.toFixed(1)}%</b>（仅扣物料，未扣推广），定价空间健康；全成本真实毛利率请看 KPI 卡`});
   }
   /* 真实净利洞察（partial 月按"按已过天数换算物料"得出的是实际已发生数；亏损提醒要看整月预估） */
   if(!isPartialMonth&&monthRealProfit<0){
     insights.push({lvl:'danger',icon:'💔',t:`月真实净利 <b style="color:#f54a45">${fmtCny(monthRealProfit)}</b>，扣除物料+推广后亏损，需立即优化`});
-  }else if(!isPartialMonth&&monthRealProfit>0&&realRoi<1){
+  }else if(!isPartialMonth&&monthRealProfit>0&&realRoi!=null&&realRoi<1){
     insights.push({lvl:'warn',icon:'⚖️',t:`月真实净利为正但真实 ROI < 1，意味着每 1 元投入仅换回 ${realRoi.toFixed(2)} 元，建议重新评估投产模型`});
   }else if(isPartialMonth&&monthRealProfitProjected<0){
     insights.push({lvl:'danger',icon:'💔',t:`整月预估真实净利 <b style="color:#f54a45">${fmtCny(monthRealProfitProjected)}</b>，按当前日均推算月底会亏损，需控费提量`});
@@ -2744,6 +2741,56 @@ function renderDashboard(c){
   const insightsHtml=insights.length?`<div class="card">
     <div class="bar-title">💡 智能经营洞察 <span class="sub">${insights.length} 条建议</span></div>
     ${insights.map(i=>`<div class="insight ${i.lvl}"><span class="ii">${i.icon}</span><span class="ib">${i.t}</span></div>`).join('')}
+  </div>`:'';
+
+  /* ---------- 月度经营全景（创始人视角：近 12 个完整月） ---------- */
+  const mGroups=(function(){
+    const m=new Map();
+    for(const r of state.rows){const k=r.date.slice(0,7);if(!m.has(k))m.set(k,[]);m.get(k).push(r);}
+    return [...m.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
+  })();
+  /* 最新月若不完整则标注，全景图展示最近 12 个月 */
+  const mAll=mGroups.map(([k,rs])=>{
+    const gmv=rs.reduce((a,r)=>a+(+r.values['总收入']||0),0);
+    const promo=rs.reduce((a,r)=>a+(+r.values['总推广支出']||0),0);
+    const refund=rs.reduce((a,r)=>a+(+r.values['总退款']||0),0);
+    const qty=rs.reduce((a,r)=>a+(+r.values['总销量']||0),0);
+    return {k,gmv,promo,refund,qty,
+      net:gmv-refund-promo,
+      roi:promo>0?gmv/promo:null,
+      refundRate:gmv>0?refund/gmv*100:null,
+      promoRate:gmv>0?promo/gmv*100:null};
+  });
+  const mLastKey=state.rows.length?state.rows[state.rows.length-1].date.slice(0,7):null;
+  const mLastDays=mLastKey?(function(){const[yr,mo]=mLastKey.split('-').map(Number);return new Date(yr,mo,0).getDate();})():30;
+  const mLastActual=mGroups.find(g=>g[0]===mLastKey)?mGroups.find(g=>g[0]===mLastKey)[1].length:0;
+  const mLastPartial=mLastActual<mLastDays;
+  const mView=mAll.slice(-12);
+  const mLabels=mView.map(m=>(+m.k.split('-')[1])+'月');
+  const monthlyHtml=mView.length>=2?`<div class="card">
+    <div class="bar-title">🗓️ 月度经营全景 <span class="sub">近 ${mView.length} 个月 · 创始人视角</span>
+      <span style="margin-left:auto"><span class="est-tag">${mLastPartial?mLastKey+' 仅 '+mLastActual+'/' +mLastDays+' 天':'全月口径'}</span></span></div>
+    <div class="chart-box" id="mPanoramaChart" style="height:240px"></div>
+    <div class="chart-box" id="mRoiChart" style="height:160px;margin-top:14px"></div>
+    <div style="overflow-x:auto;margin-top:14px"><table class="rt sumtable"><thead><tr>
+      <th>月份</th><th style="text-align:right">GMV</th><th style="text-align:right">推广费</th>
+      <th style="text-align:right">退款</th><th style="text-align:right">营销净回款</th>
+      <th style="text-align:right">销量(瓶)</th><th style="text-align:right">投放ROI</th>
+      <th style="text-align:right">推广费率</th><th style="text-align:right">退款率</th>
+    </tr></thead><tbody>
+    ${mView.slice().reverse().map(m=>`<tr${m.k===mLastKey?' style="background:var(--accent-weak,#eef3fd);font-weight:600"':''}>
+      <td>${m.k}${m.k===mLastKey&&mLastPartial?'（未整月）':''}</td>
+      <td style="text-align:right;color:#3370ff">${fmtCny(m.gmv)}</td>
+      <td style="text-align:right;color:#f54a45">${fmtCny(m.promo)}</td>
+      <td style="text-align:right;color:#f54a45">${fmtCny(m.refund)}</td>
+      <td style="text-align:right;color:${m.net>=0?'#1e9e62':'#f54a45'}">${fmtCny(m.net)}</td>
+      <td style="text-align:right">${m.qty.toLocaleString('zh-CN')}</td>
+      <td style="text-align:right" class="${m.roi!=null?(m.roi>=2?'roi-up':'roi-down'):''}">${m.roi!=null?m.roi.toFixed(2):'—'}</td>
+      <td style="text-align:right">${m.promoRate!=null?m.promoRate.toFixed(1)+'%':'—'}</td>
+      <td style="text-align:right">${m.refundRate!=null?m.refundRate.toFixed(1)+'%':'—'}</td>
+    </tr>`).join('')}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:10px">营销净回款 = GMV − 推广 − 退款（现金口径，未扣货款成本/工资/房租）；会计全口径净利润见「💰 财务全景」。当月未整月时不参与环比结论，仅作趋势参考。</div>
   </div>`:'';
 
   /* ---------- GMV 趋势（近 30 天） ---------- */
@@ -2795,6 +2842,8 @@ function renderDashboard(c){
     <div class="frow"><span class="flabel">平台</span><div class="seg" id="segPlat">${platSeg}</div></div>
   </div>
   ${heroHtml}
+  ${alertsHtml}
+  ${monthlyHtml}
   ${kpiGroups}
   <div class="section-h">📊 财务核心 <span class="section-sub">${(dashTime==='month'&&isPartialMonth)?monthLbl:DASH_TIME_LABEL[dashTime]}${dashPlatform!=='全部'?' · '+dashPlatform:''}${prevTot?' · vs 上期':''}</span></div>
   <div class="dkpis">${finKpiHtml}</div>
@@ -2815,7 +2864,6 @@ function renderDashboard(c){
     </div>
   </div>
   ${insightsHtml}
-  ${alertsHtml}
   <div class="card">
     <div class="bar-title">推广费用汇总 <span class="sub">${esc(DASH_TIME_LABEL[dashTime])} · ${esc(dashPlatform)}${list.length?` · ${list.length} 个平台`:''}</span>
       <span style="margin-left:auto"><button class="btn" id="dashDetailBtn">🔍 查看详细报告</button></span></div>
@@ -2823,7 +2871,7 @@ function renderDashboard(c){
       <th>平台</th><th style="text-align:right">支出金额</th><th style="text-align:right">GMV</th><th style="text-align:right">销量</th><th style="text-align:right">退款金额</th><th style="text-align:right">净利</th><th style="text-align:right">ROI</th>
     </tr></thead><tbody id="sumBody"></tbody></table></div>
   </div>
-  <div class="dash-foot">口径：当本月未成型时（即 isPartialMonth），月营收/真实净利/库存周转等指标按"已过 ${monthDaysSoFar}/${monthDaysTotal} 天"口径展示，并提供整月预估（按当前日均年化，带「估算」标签）；环比对比统一使用"上月同期"（同期同长度日）。物料成本按已过天数折算，推广/退款按 5 天数据直接计算。</div>`;
+  <div class="dash-foot">口径：当本月未成型时（即 isPartialMonth），月营收/真实净利/销售达成率等指标按"已过 ${monthDaysSoFar}/${monthDaysTotal} 天"口径展示，并提供整月预估（按当前日均年化，带「估算」标签）；环比对比统一使用"上月同期"（同期同长度日）。物料成本按已过天数折算，推广/退款按已过 ${monthDaysSoFar} 天实际数据计算；销售达成率=当月销量÷预估月销（非库存周转率，系统暂无真实库存数据）。</div>`;
   // 筛选器交互
   c.querySelectorAll('#segTime a').forEach(a=>a.onclick=()=>{dashTime=a.dataset.t;render();});
   c.querySelectorAll('#segPlat a').forEach(a=>a.onclick=()=>{dashPlatform=a.dataset.p;render();});
@@ -2851,6 +2899,43 @@ function renderDashboard(c){
   $('#sumBody').innerHTML=rowsHtml;
   renderPlatChart($('#platChart'),list);
   renderDonut($('#donutBox'),list);
+  /* 月度经营全景图 */
+  if(monthlyHtml&&$('#mPanoramaChart')){
+    renderChart($('#mPanoramaChart'),mLabels,[
+      {name:'GMV',values:mView.map(m=>m.gmv),color:'#3370ff',mode:'bar'},
+      {name:'营销净回款',values:mView.map(m=>m.net),color:'#1e9e62'},
+      {name:'推广费',values:mView.map(m=>m.promo),color:'#f54a45',dashed:true}
+    ],'cny');
+    /* ROI/费率双指标折线（右轴百分比口径，用 0-50 区间绘制） */
+    const roiEl=$('#mRoiChart');
+    if(roiEl){
+      const W=roiEl.clientWidth||roiEl.parentElement.clientWidth||900, H=160;
+      const padL=44,padR=44,padT=14,padB=26;
+      const iw=W-padL-padR, ih=H-padT-padB;
+      const rois=mView.map(m=>m.roi), prs=mView.map(m=>m.promoRate);
+      const roiMax=Math.max(5,...rois.filter(v=>v!=null),1);
+      const prMax=Math.max(20,...prs.filter(v=>v!=null),1);
+      const X=i=>padL+ (mView.length===1?iw/2:i/(mView.length-1)*iw);
+      const Yr=v=>padT+ih-(v/roiMax)*ih;
+      const Yp=v=>padT+ih-(v/prMax)*ih;
+      const path=arr=>arr.map((v,i)=>v==null?'':(i===0?'M':'L')+X(i).toFixed(1)+' '+(Yr(v)).toFixed(1)).join(' ');
+      const pathP=arr=>arr.map((v,i)=>v==null?'':(i===0?'M':'L')+X(i).toFixed(1)+' '+(Yp(v)).toFixed(1)).join(' ');
+      let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px" role="img" aria-label="月度ROI与推广费率趋势">`;
+      [0,0.25,0.5,0.75,1].forEach(t=>{const y=padT+ih-t*ih;
+        svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#eef0f5" stroke-width="1"/>`;
+        svg+=`<text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="10" fill="#9aa3b2">${(roiMax*t).toFixed(1)}</text>`;
+        svg+=`<text x="${W-padR+6}" y="${y+3}" text-anchor="start" font-size="10" fill="#9aa3b2">${(prMax*t).toFixed(0)}%</text>`;});
+      mLabels.forEach((l,i)=>{svg+=`<text x="${X(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#9aa3b2">${l}</text>`;});
+      svg+=`<path d="${pathP(prs)}" fill="none" stroke="#ff8800" stroke-width="2" stroke-dasharray="5 3"/>`;
+      svg+=`<path d="${path(rois)}" fill="none" stroke="#1e9e62" stroke-width="2.2"/>`;
+      rois.forEach((v,i)=>{if(v!=null)svg+=`<circle cx="${X(i)}" cy="${Yr(v)}" r="3" fill="#1e9e62"><title>${mView[i].k} ROI ${v.toFixed(2)}</title></circle>`;});
+      prs.forEach((v,i)=>{if(v!=null)svg+=`<circle cx="${X(i)}" cy="${Yp(v)}" r="2.5" fill="#ff8800"><title>${mView[i].k} 推广费率 ${v.toFixed(1)}%</title></circle>`;});
+      svg+=`</svg>`;
+      roiEl.innerHTML=`<div style="display:flex;gap:16px;font-size:11.5px;color:var(--ink2);margin-bottom:4px">
+        <span><span style="display:inline-block;width:14px;height:3px;background:#1e9e62;border-radius:2px;vertical-align:middle"></span> 投放ROI（左轴）</span>
+        <span><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #ff8800;vertical-align:middle"></span> 推广费率%（右轴）</span></div>`+svg;
+    }
+  }
   /* GMV 趋势 */
   if(last30.length&&$('#gmvTrendChart')){
     const labels=last30.map(r=>r.date.slice(5).replace('-','/'));
