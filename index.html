@@ -1044,7 +1044,7 @@ function buildReport(type,key){
   });
 
   // 真实 ROI（物料 + 推广 / GMV）—— 仅当有产品快照时计算，追加到 KPI 卡列表
-  if(state.products && state.products.items && state.products.items.length){
+  if(prodItems().length){
     const curR=periodRealStats(curRows);
     const prevR=pk?periodRealStats(prevRows):{materialCost:null,realRoi:null};
     let matDelta=null, roiDelta=null;
@@ -1345,23 +1345,28 @@ function render(){
 function syncModNav(m){document.querySelectorAll('#modnav a').forEach(a=>a.classList.toggle('on',a.dataset.mod===m));}
 
 /* ---------- 产品成本（总览 / 产品明细 / 物料报价 / 供应商） ---------- */
+const BUILTIN_PRODUCTS={"_builtin": true, "items": [{"name": "不在场 50ml", "product_line": "50ml正装", "unit_cost": 11.88, "est_monthly_qty": 43, "margin_rate": 90.1, "monthly_revenue": 5160.0, "monthly_cost": 510.84, "monthly_gross_profit": 4649.16, "bom": [{"name": "香水水体50ml", "qty": 1, "min_price": 6.3, "supplier": "葵花"}, {"name": "蔚蓝方形菱角瓶50ml", "qty": 1, "min_price": 1.1, "supplier": "润园"}, {"name": "黑色电解铝喷头+吸管", "qty": 1, "min_price": 0.5, "supplier": "葵花"}, {"name": "方形abs加重黑盖", "qty": 1, "min_price": 1.1, "supplier": "润园"}, {"name": "pvc标贴-不在场", "qty": 1, "min_price": 0.237, "supplier": "竣彩"}, {"name": "透明pvc底标", "qty": 1, "min_price": 0.0445, "supplier": "葵花"}, {"name": "天地盖包装盒", "qty": 1, "min_price": 2.6, "supplier": "嘉华"}]}, {"name": "晚点到 50ml", "product_line": "50ml正装", "unit_cost": 14.84, "est_monthly_qty": 43, "margin_rate": 87.63, "monthly_revenue": 5160.0, "monthly_cost": 638.12, "monthly_gross_profit": 4521.88, "bom": [{"name": "晚点到50ml水体", "qty": 1, "min_price": 6.3, "supplier": "葵花"}, {"name": "晚点到喷金瓶50ml", "qty": 1, "min_price": 3.8, "supplier": "润园"}, {"name": "金色电解铝中套喷头套", "qty": 1, "min_price": 0.6, "supplier": "润园"}, {"name": "罗马柱棱角abs金盖", "qty": 1, "min_price": 1.3, "supplier": "润园"}, {"name": "pvc标贴", "qty": 1, "min_price": 0.2, "supplier": "竣彩"}, {"name": "透明pvc底标", "qty": 1, "min_price": 0.0445, "supplier": "葵花"}, {"name": "天地盖包装盒", "qty": 1, "min_price": 2.6, "supplier": "嘉华"}]}, {"name": "含苞 50ml", "product_line": "50ml正装", "unit_cost": 12.24, "est_monthly_qty": 43, "margin_rate": 89.8, "monthly_revenue": 5160.0, "monthly_cost": 526.32, "monthly_gross_profit": 4633.68, "bom": [{"name": "含苞50ml水体", "qty": 1, "min_price": 6.3, "supplier": "葵花"}, {"name": "祖玛珑菱形瓶50ml", "qty": 1, "min_price": 1.2, "supplier": "润园"}, {"name": "银色电解铝喷头+吸管", "qty": 1, "min_price": 0.5, "supplier": "葵花"}, {"name": "大头abs银色盖", "qty": 1, "min_price": 1.4, "supplier": "润园"}, {"name": "PVC标贴-含苞绽放", "qty": 1, "min_price": 0.2, "supplier": "竣彩"}, {"name": "透明pvc底标", "qty": 1, "min_price": 0.0445, "supplier": "葵花"}, {"name": "天地盖包装盒", "qty": 1, "min_price": 2.6, "supplier": "嘉华"}]}, {"name": "绽放 50ml", "product_line": "50ml正装", "unit_cost": 12.14, "est_monthly_qty": 43, "margin_rate": 89.88, "monthly_revenue": 5160.0, "monthly_cost": 522.02, "monthly_gross_profit": 4637.98, "bom": [{"name": "绽放50ml水体", "qty": 1, "min_price": 6.3, "supplier": "葵花"}, {"name": "祖玛珑菱形瓶50ml", "qty": 1, "min_price": 1.2, "supplier": "润园"}, {"name": "银色电解铝喷头+吸管", "qty": 1, "min_price": 0.5, "supplier": "葵花"}, {"name": "圆柱加重abs黑盖", "qty": 1, "min_price": 1.3, "supplier": "润园"}, {"name": "PVC标贴-含苞绽放", "qty": 1, "min_price": 0.2, "supplier": "竣彩"}, {"name": "透明pvc底标", "qty": 1, "min_price": 0.0445, "supplier": "葵花"}, {"name": "天地盖包装盒", "qty": 1, "min_price": 2.6, "supplier": "嘉华"}]}, {"name": "暗戳戳 100ml", "product_line": "100ml正装", "unit_cost": 18.49, "est_monthly_qty": 43, "margin_rate": 84.59, "monthly_revenue": 5160.0, "monthly_cost": 795.07, "monthly_gross_profit": 4364.93, "bom": [{"name": "暗戳戳100ml水体", "qty": 1, "min_price": 11.0, "supplier": "葵花"}, {"name": "暗戳戳黑瓶100ml", "qty": 1, "min_price": 2.4, "supplier": "润园"}, {"name": "黑色电解铝喷头+吸管", "qty": 1, "min_price": 0.5, "supplier": "葵花"}, {"name": "方形abs加重黑盖", "qty": 1, "min_price": 1.1, "supplier": "润园"}, {"name": "铝标贴", "qty": 1, "min_price": 0.85, "supplier": "聚亨"}, {"name": "透明pvc底标", "qty": 1, "min_price": 0.0445, "supplier": "葵花"}, {"name": "天地盖包装盒", "qty": 1, "min_price": 2.6, "supplier": "嘉华"}]}, {"name": "西西里白橘 50ml", "product_line": "50ml正装", "unit_cost": 12.01, "est_monthly_qty": 43, "margin_rate": 89.99, "monthly_revenue": 5160.0, "monthly_cost": 516.43, "monthly_gross_profit": 4643.57, "bom": [{"name": "西西里白橘50ml水体", "qty": 1, "min_price": 5.6, "supplier": "葵花"}, {"name": "祖玛珑菱形瓶50ml", "qty": 1, "min_price": 1.2, "supplier": "润园"}, {"name": "银色电解铝喷头+吸管", "qty": 1, "min_price": 0.5, "supplier": "葵花"}, {"name": "大头abs银色盖", "qty": 1, "min_price": 1.4, "supplier": "润园"}, {"name": "萨博特种纸标贴UV", "qty": 1, "min_price": 0.665, "supplier": "二次方"}, {"name": "透明pvc底标", "qty": 1, "min_price": 0.0445, "supplier": "葵花"}, {"name": "天地盖包装盒", "qty": 1, "min_price": 2.6, "supplier": "嘉华"}]}, {"name": "放过菲格夫人 50ml", "product_line": "50ml正装", "unit_cost": 11.34, "est_monthly_qty": 43, "margin_rate": 90.55, "monthly_revenue": 5160.0, "monthly_cost": 487.62, "monthly_gross_profit": 4672.38, "bom": [{"name": "放过菲格夫人50ml水体", "qty": 1, "min_price": 5.5, "supplier": "葵花"}, {"name": "祖玛珑菱形瓶50ml", "qty": 1, "min_price": 1.2, "supplier": "润园"}, {"name": "银色电解铝喷头+吸管", "qty": 1, "min_price": 0.5, "supplier": "葵花"}, {"name": "圆柱加重abs黑盖", "qty": 1, "min_price": 1.3, "supplier": "润园"}, {"name": "pvc标贴", "qty": 1, "min_price": 0.2, "supplier": "竣彩"}, {"name": "透明pvc底标", "qty": 1, "min_price": 0.0445, "supplier": "葵花"}, {"name": "天地盖包装盒", "qty": 1, "min_price": 2.6, "supplier": "嘉华"}]}], "monthlyCost": 3996.42, "monthlyRevenue": 36120.0, "monthlyGrossProfit": 32123.58, "monthlyPromoTotal": 17490.0, "promoPerUnitTotal": 60.31, "promoWindowSales": 290, "promoPeriod": "2026-08", "overallMarginRate": 88.94, "lastSync": null, "sourceNote": "内置BOM成本（OA供应商报价测算·含天地盖包装盒）；月销量为等权估算，运行 sync-products.js 导入真实配比后自动覆盖"};
+
+/* 产品成本：优先用同步快照（state.products）；无则回落到内置 BOM 默认（OA供应商报价测算） */
+function getProducts(){return (state.products&&state.products.items&&state.products.items.length)?state.products:BUILTIN_PRODUCTS;}
+function prodIsBuiltin(){return !(state.products&&state.products.items&&state.products.items.length);}
 let prodTab='overview';   // overview|items|quotes|suppliers
-function prodItems(){return (state.products&&state.products.items)||[];}
-function prodQuoteStats(){return (state.products&&state.products.quoteStats)||{};}
-function prodMonths(){return state.products?{
-  monthlyCost: state.products.monthlyCost,
-  monthlyRevenue: state.products.monthlyRevenue,
-  monthlyGrossProfit: state.products.monthlyGrossProfit,
-  monthlyPromoTotal: state.products.monthlyPromoTotal||0,
-  promoPeriod: state.products.promoPeriod||null,
-  promoPerUnitTotal: state.products.promoPerUnitTotal||0,
-  promoWindowSales: state.products.promoWindowSales||0,
-  overallMarginRate: state.products.overallMarginRate,
-  lastSync: state.products.lastSync
+function prodItems(){return (getProducts()&&getProducts().items)||[];}
+function prodQuoteStats(){return (getProducts()&&getProducts().quoteStats)||{};}
+function prodMonths(){const pp=getProducts();return pp?{
+  monthlyCost: pp.monthlyCost,
+  monthlyRevenue: pp.monthlyRevenue,
+  monthlyGrossProfit: pp.monthlyGrossProfit,
+  monthlyPromoTotal: pp.monthlyPromoTotal||0,
+  promoPeriod: pp.promoPeriod||null,
+  promoPerUnitTotal: pp.promoPerUnitTotal||0,
+  promoWindowSales: pp.promoWindowSales||0,
+  overallMarginRate: pp.overallMarginRate,
+  lastSync: pp.lastSync
 }:null;}
 
 function renderProducts(c){
-  const p=state.products;
+  const p=getProducts();
   if(!p||!p.items||!p.items.length){
     c.innerHTML='<div class="card"><div class="empty"><div class="big">📦</div><p>暂无产品成本数据</p>'
       +'<p style="font-size:12px;color:var(--ink3)">在项目目录运行 <code>node sync-products.js</code>：导入供应商物料报价 + 产品 BOM Excel</p>'
@@ -1372,7 +1377,7 @@ function renderProducts(c){
   let html='<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px">'
     +'<div class="bar-title" style="margin:0">产品成本 <span class="sub">口径：按 BOM × 各组件最低供应商报价 × 预估月销量</span></div>'
     +'<div class="seg no-print" style="margin-left:auto">'+tabs.map(t=>`<a class="${prodTab===t[0]?'on':''}" onclick="prodTab='${t[0]}';render()">${t[1]}</a>`).join('')+'</div></div>'
-    +`<div style="font-size:11.5px;color:var(--ink3);margin-top:10px;line-height:1.7">⚠️ 单瓶成本 = BOM 中每个组件用量 × 该组件最低供应商报价（不含包材外的物流/人工/检测费）。月销量来自 <code>products.xlsx</code>「预估月销量」列。月收入/毛利由单瓶售价/成本 × 月销量推算。最后同步：${p.lastSync?new Date(p.lastSync).toLocaleString('zh-CN'):'—'}。</div></div>`;
+    +`<div style="font-size:11.5px;color:var(--ink3);margin-top:10px;line-height:1.7">${prodIsBuiltin()?'<b style="color:#b9770e">📌 当前为内置 BOM 默认成本（OA供应商报价测算·含天地盖包装盒），月销量按等权估算；跑 <code>node sync-products.js</code> 导入真实 products.xlsx 后自动替换。</b><br>':''}⚠️ 单瓶成本 = BOM 各组件供应商报价之和（含水体/瓶/喷头/盖/标贴/底标/天地盖盒，不含灌装/物流/人工/损耗）。月销量来自「预估月销量」列；售价按均价 ¥120 估算月收入/毛利。最后同步：${p.lastSync?new Date(p.lastSync).toLocaleString('zh-CN'):(prodIsBuiltin()?'内置默认':'—')}。</div></div>`;
 
   if(prodTab==='overview')  html+=prodViewOverview();
   if(prodTab==='items')     html+=prodViewItems();
@@ -1773,7 +1778,7 @@ function renderChannelOps(c){
   </div>`;
 
   /* 真实 ROI 排名（含估算 BOM 单瓶物料 × 销量） */
-  const rs=state.products&&state.products.items?periodRealStats(dashRows()):null;
+  const rs=prodItems().length?periodRealStats(dashRows()):null;
   const chRoiRows=chs.map(ch=>{
     const gmv=sumCol(dashRows(),ch+'收入'),spend=sumCol(dashRows(),ch+'推广支出'),
           refund=sumCol(dashRows(),ch+'退款'),profit=sumCol(dashRows(),ch+'净收入'),qty=sumCol(dashRows(),ch+'销量');
@@ -1826,7 +1831,7 @@ function renderChannelOps(c){
    供应链（新增模块）
    ============================================================ */
 function renderSupplyChain(c){
-  if(!state.products||!state.products.items||!state.products.items.length){
+  if(!prodItems().length){
     c.innerHTML='<div class="card"><div class="empty"><div class="big">🏭</div><p>暂无供应链数据</p>'
       +'<p style="font-size:12px;color:var(--ink3)">先在项目目录运行 <code>node sync-products.js</code>：导入供应商物料报价 + 产品 BOM Excel</p></div></div>';
     return;
@@ -2509,7 +2514,7 @@ function renderDashboard(c){
   }:null;
   const prevAvgRoi=prevTot&&prevTot.spend>0&&prevTot.gmv>0?prevTot.gmv/prevTot.spend:null;
   // 真实 ROI
-  const hasProd=state.products&&state.products.items&&state.products.items.length;
+  const hasProd=prodItems().length>0;
   const rs=hasProd?periodRealStats(curRows):null;
   const prevRs=hasProd&&prevRows?periodRealStats(prevRows):null;
   // 综合毛利率
@@ -2826,6 +2831,31 @@ function renderDashboard(c){
   else if(rs&&rs.realRoi!=null&&rs.realRoi>=3){alerts.push({lvl:'green',icon:'🌟',txt:`真实 ROI ${rs.realRoi.toFixed(2)} 表现优秀！建议加大同渠道投入`});}
   list.forEach(d=>{if(d.roi!=null&&d.roi<1){alerts.push({lvl:'red',icon:'⚠️',txt:`平台「${d.plat}」ROI ${d.roi.toFixed(2)} < 1，亏损需关注`});}});
   if(dashTime==='today'&&tot.qty===0){alerts.push({lvl:'yellow',icon:'😶',txt:'当日销量为 0——是否漏录数据？'});}
+  /* 数据勾稽自检：源表「总支出」应≈各渠道推广+退款；对不上说明 Excel 公式/填数有误（如漏退款） */
+  (function(){
+    const w=state.rows||[];
+    if(!w.length)return;
+    const now=new Date();
+    const span=(dashTime==='today')?1:(dashTime==='week')?7:(dashTime==='month')?31:(dashTime==='year')?366:9999;
+    const chSet=channelsOf();
+    const recent=w.slice(-span);
+    let badDays=0,badExp=0,badNet=0;
+    recent.forEach(r=>{
+      const v=r.values||{};
+      let ad=0,rf=0;
+      chSet.forEach(ch=>{ad+=Number(v[ch+'推广支出'])||0;rf+=Number(v[ch+'退款'])||0;});
+      const exp=Number(v['总支出']);
+      if(isFinite(exp)&&ad+rf>0){
+        if(Math.abs(exp-(ad+rf))>Math.max(1,(ad+rf)*0.02)){badDays++;badExp+=(ad+rf-exp);}
+      }
+      const rev=Number(v['总收入']),net=Number(v['净收入']);
+      if(isFinite(exp)&&isFinite(rev)&&isFinite(net)){
+        if(Math.abs(net-(rev-exp))>Math.max(1,Math.abs(rev-exp)*0.02)){badNet++;}
+      }
+    });
+    if(badDays>0){alerts.push({lvl:'red',icon:'🧮',txt:`数据勾稽异常：近 ${recent.length} 天有 ${badDays} 天「总支出」≠推广+退款（差额约 ¥${Math.abs(badExp).toFixed(0)}，多为漏记退款）——请检查 Excel「N月汇总」支出公式，口径应为 推广+退款`});}
+    else if(badNet>0){alerts.push({lvl:'yellow',icon:'🧮',txt:`数据勾稽提示：有 ${badNet} 天「净收入」≠收入−支出，请核对源表净收入列`});}
+  })();
   const promoRatio=tot.gmv>0?tot.spend/tot.gmv*100:0;
   if(promoRatio>35){alerts.push({lvl:'red',icon:'💸',txt:`推广占 GMV ${promoRatio.toFixed(1)}% 超过警戒值 35%`});}
   if(refundRate>15){alerts.push({lvl:'yellow',icon:'🔄',txt:`退款率 ${refundRate.toFixed(1)}% 偏高，需排查品控/物流`});}
