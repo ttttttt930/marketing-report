@@ -2434,23 +2434,25 @@ const TOT_COL={'收入':'总收入','推广支出':'总推广支出','退款':'�
 function platCol(plat,base){return plat==='全部'?TOT_COL[base]:plat+base;}
 function sumCol(rows,col){return rows.reduce((a,r)=>a+((r.values&&r.values[col])||0),0);}
 function dashRows(){
-  if(dashTime==='all'||!state.rows.length)return state.rows;
-  const last=state.rows[state.rows.length-1].date;let f;
-  if(dashTime==='today')f=r=>r.date===last;
-  else if(dashTime==='week'){const k=weekKeyOf(last);f=r=>weekKeyOf(r.date)===k;}
-  else if(dashTime==='month'){const k=last.slice(0,7);f=r=>r.date.slice(0,7)===k;}
-  else{const k=last.slice(0,4);f=r=>r.date.slice(0,4)===k;}
-  return state.rows.filter(f);
+  if(!state.rows.length)return state.rows;
+  if(dashTime==='all')return state.rows;
+  const last=state.rows[state.rows.length-1].date;
+  const li=state.rows.findIndex(r=>r.date===last);
+  if(dashTime==='today')return state.rows.filter(r=>r.date===last);
+  if(dashTime==='week')return state.rows.slice(Math.max(0,li-6),li+1);   // 滚动近7天（含今日）
+  if(dashTime==='month')return state.rows.filter(r=>r.date.slice(0,7)===last.slice(0,7));
+  return state.rows.filter(r=>r.date.slice(0,4)===last.slice(0,4));      // year
 }
 /* 上期区间（用于同比/环比）—— 'all' 模式返回 null */
 function prevDashRows(){
-  if(dashTime==='all'||!state.rows.length)return null;
-  const last=state.rows[state.rows.length-1].date;let f;
-  if(dashTime==='today'){const prev=addDays(last,-1);f=r=>r.date===prev;}
-  else if(dashTime==='week'){const k=prevWeekKey(weekKeyOf(last));f=r=>weekKeyOf(r.date)===k;}
-  else if(dashTime==='month'){const k=prevMonthKey(last.slice(0,7));f=r=>r.date.slice(0,7)===k;}
-  else{const k=(+last.slice(0,4)-1).toString();f=r=>r.date.slice(0,4)===k;}
-  return state.rows.filter(f);
+  if(!state.rows.length)return null;
+  if(dashTime==='all')return null;
+  const last=state.rows[state.rows.length-1].date;
+  const li=state.rows.findIndex(r=>r.date===last);
+  if(dashTime==='today'){const prev=addDays(last,-1);return state.rows.filter(r=>r.date===prev);}
+  if(dashTime==='week')return state.rows.slice(Math.max(0,li-13),Math.max(0,li-6)); // 再往前7天
+  if(dashTime==='month'){const k=prevMonthKey(last.slice(0,7));return state.rows.filter(r=>r.date.slice(0,7)===k);}
+  const k=(+last.slice(0,4)-1).toString();return state.rows.filter(r=>r.date.slice(0,4)===k);
 }
 function prevWeekKey(k){const[y,w]=k.split('-W').map(Number);return w===1?`${y-1}-W52`:`${y}-W${String(w-1).padStart(2,'0')}`;}
 function prevMonthKey(k){const[y,m]=k.split('-').map(Number);return m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;}
@@ -2562,39 +2564,57 @@ function renderDashboard(c){
   const turnover=isPartialMonth&&totalEstQty>0?+(monthProjectedQty/totalEstQty*100).toFixed(1):turnoverReal;
   const turnoverLbl=turnover==null?'—':turnover>=80?'高':turnover>=40?'中':'低';
 
+/* ---------- Hero 速览：随时间筛选联动（日报/周报/月报/年报/全部）---------- */
+  const pCfg={today:['今日营收','昨日'],week:['本周营收','上周'],month:['本月营收','上月同期'],year:['本年营收','去年同期'],all:['累计营收','']};
+  const pHgmv=tot.gmv,pPromo=tot.spend,pRefund=tot.refund,pQty=tot.qty;
+  const pMat=rs?(rs.materialCost||0):0;
+  const pNet=pHgmv-pMat-pPromo;
+  const pCash=pHgmv-pPromo-pRefund;
+  const pRoi=(rs&&rs.realRoi!=null)?rs.realRoi:null;
+  const pPrevGmv=prevTot?prevTot.gmv:null;
+  const pPrevCash=prevTot?(prevTot.gmv-prevTot.spend-prevTot.refund):null;
+  const pPrevNet=(prevRs&&pPrevGmv!=null)?(pPrevGmv-(prevRs.materialCost||0)-prevTot.spend):null;
+  const pPrevRoi=(prevRs&&prevRs.realRoi!=null)?prevRs.realRoi:null;
+  const pTitle=pCfg[dashTime][0];
+  const pSubNote=(dashTime==='month'&&isPartialMonth)
+    ? `<br/>整月预估 <span style="font-weight:600">${fmtCny(monthProjectedGmv)}</span> <span class="est-tag">估算</span>`
+    : (dashTime==='all'?` · 共 ${pQty.toLocaleString('zh-CN')} 瓶`:` · ${pQty.toLocaleString('zh-CN')} 瓶 · 日均 ${fmtCny(curRows.length?pHgmv/curRows.length:0)}`);
   const heroHtml=`<div class="hero-strip">
     <div class="hero hero-primary">
       <div class="h-emoji">💰</div>
       <div class="h-body">
-        <div class="h-k">月营收${isPartialMonth?'<span class="est-tag" style="margin-left:4px">截至 '+(monthDaysSoFar)+'/'+monthDaysTotal+'天</span>':''}</div>
-        <div class="h-v">${monthGmv>0?fmtCny(monthGmv):'—'}</div>
-        <div class="h-sub">${esc(monthLbl)}${prevMonthGmv?' · <span style="color:'+(((monthGmv-prevMonthGmv)/prevMonthGmv*100)>=0?'#1e9e62':'#f54a45')+'">'+(((monthGmv-prevMonthGmv)/prevMonthGmv*100)>=0?'+':'')+((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)+'% vs 上月同期</span>':''}${isPartialMonth?'<br/>整月预估 <span style="font-weight:600">'+fmtCny(monthProjectedGmv)+'</span> <span class="est-tag">估算</span>':''}</div>
+        <div class="h-k">${pTitle}${dashTime==='month'&&isPartialMonth?`<span class="est-tag" style="margin-left:4px">截至 ${monthDaysSoFar}/${monthDaysTotal}天</span>`:''}</div>
+        <div class="h-v">${pHgmv>0?fmtCny(pHgmv):'—'}</div>
+        <div class="h-sub">${esc(dashRangeLabel())}${pSubNote}</div>
       </div>
-      ${deltaChip(monthGmv,prevMonthGmv,false)}
+      ${pPrevGmv!=null?deltaChip(pHgmv,pPrevGmv,false):'<span class="chip chip-null">—</span>'}
     </div>
     <div class="hero">
       <div class="h-emoji">✨</div>
       <div class="h-body">
-        <div class="h-k">真实净利${isPartialMonth?'<span class="est-tag" style="margin-left:4px">'+monthDaysSoFar+'天</span>':''}</div>
-        <div class="h-v" style="color:${monthRealProfit>=0?'#1e9e62':'#f54a45'}">${fmtCny(monthRealProfit)}</div>
-        <div class="h-sub">营收 ${fmtCny(monthGmv)}${isPartialMonth?'（按已过 '+monthDaysSoFar+' 天）':''} − 物料 ${fmtCny(isPartialMonth?monthMatCostPartial:monthMatCostFull)} − 推广 ${fmtCny(monthPromo)}${isPartialMonth?'<br/>整月预估 <span style="font-weight:600;color:'+(monthRealProfitProjected>=0?'#1e9e62':'#f54a45')+'">'+fmtCny(monthRealProfitProjected)+'</span> <span class="est-tag">估算</span>':''}</div>
+        <div class="h-k">真实净利<span class="est-tag" style="margin-left:4px">扣物料+推广</span></div>
+        <div class="h-v" style="color:${pNet>=0?'#1e9e62':'#f54a45'}">${pHgmv>0?fmtCny(pNet):'—'}</div>
+        <div class="h-sub">营收 ${fmtCny(pHgmv)} − 物料 ${fmtCny(pMat)} − 推广 ${fmtCny(pPromo)}</div>
       </div>
+      ${pPrevNet!=null?deltaChip(pNet,pPrevNet,false):'<span class="chip chip-null">—</span>'}
     </div>
     <div class="hero">
       <div class="h-emoji">💵</div>
       <div class="h-body">
-        <div class="h-k">现金回款<span class="est-tag" style="margin-left:4px">估算</span></div>
-        <div class="h-v">${cashFlow>0?fmtCny(cashFlow):'—'}</div>
-        <div class="h-sub">GMV − 推广 − 退款${isPartialMonth?'（'+monthDaysSoFar+' 天）<br/>整月预估 <span style="font-weight:600">'+fmtCny(cashFlowProjected)+'</span> <span class="est-tag">估算</span>':''}</div>
+        <div class="h-k">现金回款<span class="est-tag" style="margin-left:4px">GMV−推广−退款</span></div>
+        <div class="h-v">${pCash>0?fmtCny(pCash):'—'}</div>
+        <div class="h-sub">退款 ${fmtCny(pRefund)} · 退款率 ${(pHgmv>0?(pRefund/pHgmv*100):0).toFixed(1)}%</div>
       </div>
+      ${pPrevCash!=null?deltaChip(pCash,pPrevCash,false):'<span class="chip chip-null">—</span>'}
     </div>
     <div class="hero">
-      <div class="h-emoji">🔄</div>
+      <div class="h-emoji">🎯</div>
       <div class="h-body">
-        <div class="h-k">销售达成率<span class="est-tag" style="margin-left:4px">估算</span></div>
-        <div class="h-v">${turnover!=null?turnover+'%':'—'}</div>
-        <div class="h-sub">${isPartialMonth?('已过 '+monthDaysSoFar+'/'+monthDaysTotal+' 天，整月预估销量 '+monthProjectedQty+' 瓶 ÷ 预估月销 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl):('当月销量 '+monthQty+' 瓶 ÷ 预估月销 '+Math.round(totalEstQty)+' 瓶 · '+turnoverLbl)}${isPartialMonth?'<br/>同期同口径: 5 天实际周转 '+turnoverReal+'%（无年化）':''}</div>
+        <div class="h-k">真实 ROI<span class="est-tag" style="margin-left:4px">GMV÷(物料+推广)</span></div>
+        <div class="h-v" style="color:${pRoi==null?'inherit':(pRoi>=1.5?'#1e9e62':pRoi>=1?'#ff8800':'#f54a45')}">${pRoi!=null?pRoi.toFixed(2):'—'}</div>
+        <div class="h-sub">${pRoi==null?'未导入成本':(pRoi>=1.5?'高于安全线 1.5 ✅':pRoi>=1?'保本线上、安全线以下 ⚠️':'低于保本线 1，亏损 🔴')}</div>
       </div>
+      ${pPrevRoi!=null?deltaChip(pRoi,pPrevRoi,false):'<span class="chip chip-null">—</span>'}
     </div>
   </div>`;
 
@@ -2602,8 +2622,11 @@ function renderDashboard(c){
   /* 维度：营收增长 / 真实ROI / 退款控制 / 渠道集中度（反向） / 库存周转 */
   const radarDims=[];
   /* 营收增长：本月 vs 上月 */
-  const revGrowth=prevMonthGmv?(monthGmv-prevMonthGmv)/prevMonthGmv*100:0;
-  radarDims.push({n:'营收增长',v:revGrowth,score:Math.min(100,Math.max(0,50+revGrowth*2)),fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'%',good:v=>v>=10});
+  /* 营收增长：按当前时间周期环比/同比（今日=日环比，本周=周环比，本月=月环比，本年=同比） */
+  const _gNow=tot.gmv,_gPrev=prevTot?prevTot.gmv:0;
+  const revGrowth=_gPrev>0?(_gNow-_gPrev)/_gPrev*100:0;
+  const _grwLbl={today:'日环比',week:'周环比',month:'月环比',year:'年同比',all:'—'}[dashTime];
+  radarDims.push({n:'营收增长',v:revGrowth,score:Math.min(100,Math.max(0,50+revGrowth*2)),fmt:v=>(v>=0?'+':'')+v.toFixed(1)+'% '+_grwLbl,good:v=>v>=10});
   /* 真实 ROI */
   const realRoi=(rs&&rs.realRoi!=null)?rs.realRoi:null;
   radarDims.push({n:'真实ROI',v:realRoi==null?0:realRoi,score:realRoi==null?0:Math.min(100,realRoi*25),fmt:v=>realRoi==null?'未导入成本':v.toFixed(2),good:v=>v>=2});
@@ -2711,18 +2734,21 @@ function renderDashboard(c){
 
   /* ---------- 智能经营洞察（自然语言） ---------- */
   const insights=[];
-  /* partial month 专用：把"营收对比"明确为环比同期 (vs 上月同期)，避免跨窗口误判 */
-  if(isPartialMonth){
+  /* 营收增长洞察：月报(部分月)走上月同期+整月预估；其余周期走当期环比/同比 */
+  const grwWord={today:'较昨日',week:'较上周',year:'同比去年',all:''}[dashTime]||'较上期';
+  if(dashTime==='month'&&isPartialMonth){
     if(prevMonthGmv>0&&monthGmv>=prevMonthGmv){
-      insights.push({lvl:'good',icon:'📈',t:`营收对比上月同期 <b>+${((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)}%</b>（${monthDaysSoFar}/${monthDaysTotal} 天对 ${monthDaysSoFar}/${prevMonth?new Date(+prevMonth.split('-')[0],+prevMonth.split('-')[1],0).getDate():30} 天，整月预估 <b>${fmtCny(monthProjectedGmv)}</b>）`});
+      insights.push({lvl:'good',icon:'📈',t:`营收对比上月同期 <b>+${((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)}%</b>（${monthDaysSoFar}/${monthDaysTotal} 天），整月预估 <b>${fmtCny(monthProjectedGmv)}</b>`});
     }else if(prevMonthGmv>0){
-      insights.push({lvl:'warn',icon:'📉',t:`营收对比上月同期 <b>${((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)}%</b>（${monthDaysSoFar} 天同期比较，整月预估 <b>${fmtCny(monthProjectedGmv)}</b>）`});
+      insights.push({lvl:'warn',icon:'📉',t:`营收对比上月同期 <b>${((monthGmv-prevMonthGmv)/prevMonthGmv*100).toFixed(1)}%</b>（${monthDaysSoFar} 天同期），整月预估 <b>${fmtCny(monthProjectedGmv)}</b>`});
     }else{
       insights.push({lvl:'warn',icon:'📊',t:`本月已过 <b>${monthDaysSoFar}/${monthDaysTotal}</b> 天，整月预估营收 <b>${fmtCny(monthProjectedGmv)}</b> <span class="est-tag">估算</span>`});
     }
-  }else{
-    if(revGrowth>=20)insights.push({lvl:'good',icon:'📈',t:`月营收同比增长 <b>+${revGrowth.toFixed(1)}%</b>，处于加速通道`});
-    else if(revGrowth<=-10)insights.push({lvl:'danger',icon:'📉',t:`月营收同比 <b>${revGrowth.toFixed(1)}%</b> 负增长，建议排查原因（淡季？促销缺失？）`});
+  }else if(dashTime!=='all'){
+    if(revGrowth>=20)insights.push({lvl:'good',icon:'📈',t:`营收${grwWord}增长 <b>+${revGrowth.toFixed(1)}%</b>，处于加速通道`});
+    else if(revGrowth>0)insights.push({lvl:'good',icon:'📈',t:`营收${grwWord} <b>+${revGrowth.toFixed(1)}%</b>，保持增长`});
+    else if(revGrowth<=-10)insights.push({lvl:'danger',icon:'📉',t:`营收${grwWord} <b>${revGrowth.toFixed(1)}%</b> 负增长，建议排查原因（淡季？促销缺失？）`});
+    else if(revGrowth<0)insights.push({lvl:'warn',icon:'📉',t:`营收${grwWord} <b>${revGrowth.toFixed(1)}%</b> 小幅下滑，关注动销`});
   }
   if(hhi>2500)insights.push({lvl:'warn',icon:'⚖️',t:`渠道集中度 <b>HHI ${hhi.toFixed(0)}</b> 偏高（>2500），建议拓展第二渠道降低单点风险`});
   if(turnover!=null&&turnover<40)insights.push({lvl:'warn',icon:'📦',t:`销售达成率 <b>${turnover}%</b> 偏低，当月销量未达预估月销，关注动销节奏`});
