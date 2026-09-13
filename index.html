@@ -458,6 +458,14 @@ let snapshots=[];
 let curView='dashboard';  // dashboard|daily|weekly|monthly|yearly|archive|data|product|finance|channels|supply
 let MOD_VIEW='dashboard'; // 模块顶栏（与 curView 区分）：dashboard|channels|product|supply|finance
 let finTab='overview';    // overview|income|platform|balance|assets
+/* ===== 税务测算模块状态（v7） ===== */
+let taxPayer='small';      // small=小规模纳税人(非一般纳税人) | general=一般纳税人
+let taxRange='all';        // all=全期 | year=本年 | month=本月
+let taxInputRate=80;       // 一般纳税人：物料采购能取得13%专票的比例(%)
+let taxPromoInput=true;    // 一般纳税人：平台推广费是否取得6%专票
+let taxHalfSurcharge=true; // 六税两费附加减半(小微/个体适用)
+let taxVatExempt=true;     // 小规模月10万(季30万)起征点免征
+let taxOpex=0;             // 手工补充的其他税前费用(工资/房租/物流等)，默认0
 let dashTime='month';     // 仪表盘时间筛选：today|week|month|year|all
 let dashPlatform='全部';   // 仪表盘平台筛选
 const DONUT_COLORS=['#3370ff','#ff9f2b','#e0577b','#2ec5ad','#8f6bf2','#f5b93d'];
@@ -2049,7 +2057,7 @@ function renderFinance(c){
     c.innerHTML='<div class="card"><div class="empty"><div class="big">💰</div><p>暂无财务数据（凭证为空）</p><p style="font-size:12px;color:var(--ink3)">在项目目录运行 build-finance.js：初始化科目表并把营销日报自动生成为月度凭证</p></div></div>';
     return;
   }
-  const tabs=[['overview','📊 财务总览'],['income','📈 月度利润表'],['platform','🛒 平台利润'],['balance','⚖️ 科目余额表'],['assets','🏦 资产负债表']];
+  const tabs=[['overview','📊 财务总览'],['income','📈 月度利润表'],['platform','🛒 平台利润'],['balance','⚖️ 科目余额表'],['assets','🏦 资产负债表'],['tax','🧮 税务测算']];
   let html='<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px">'
     +'<div class="bar-title" style="margin:0">财务报表 <span class="sub">口径：会计确认（收入已扣退款）· 小企业会计准则</span></div>'
     +'<div class="seg no-print" style="margin-left:auto">'+tabs.map(t=>`<a class="${finTab===t[0]?'on':''}" onclick="finTab='${t[0]}';render()">${t[1]}</a>`).join('')+'</div></div>'
@@ -2060,6 +2068,7 @@ function renderFinance(c){
   if(finTab==='platform') html+=finViewPlatform();
   if(finTab==='balance')  html+=finViewBalance();
   if(finTab==='assets')   html+=finViewAssets();
+  if(finTab==='tax')      html+=finViewTax();
 
   c.innerHTML=html;
   /* 图表在 innerHTML 落地后渲染 */
@@ -2099,6 +2108,192 @@ function renderFinance(c){
     renderDonut($('#finPlatDonut'),list.map(d=>({plat:d.plat,gmv:d.income})),'收入');
     renderPlatChart($('#finPlatBar'),list);
   }
+}
+
+/* ============================================================
+   税务测算模块（v7）  口径依据：
+   - 《增值税法》及实施条例(2026-01-01施行)：销售货物税率13%；一般计税=销项-进项
+   - 财政部 税务总局2026年第10号公告、2023年第19号：小规模3%减按1%、
+     月销售额≤10万(季≤30万)免征，执行至2027-12-31
+   - 附加税费：城建税7%(市区)、教育费附加3%、地方教育附加2%，合计=增值税×12%；
+     小微/个体"六税两费"减半(2027年底前)
+   - 企业所得税：小型微利(年应纳税所得额≤300万等)实际税负5%，执行至2027-12-31
+   - 普通香水不属"高档化妆品(出厂价≥10元/毫升)"，本环节不涉及消费税
+   ============================================================ */
+const TAX_BOM_COST={  // 7款核定含包装单位成本(元/瓶)，与OA供应商报价核定表一致
+  '不在场':11.88,'晚点到':14.84,'含苞':12.24,'绽放':12.14,
+  '暗戳戳':18.49,'西西里':12.01,'菲格':11.34};
+function taxAvgCost(){ // 无分款销量时的加权(等权)单位成本
+  const a=Object.keys(TAX_BOM_COST).map(k=>TAX_BOM_COST[k]);
+  return a.reduce((x,y)=>x+y,0)/a.length;
+}
+function taxRows(range){
+  const out=[];const now=new Date();
+  const cy=now.getFullYear(),cm=now.getMonth()+1;
+  for(const r of state.rows){
+    const d=(r.date||'');const m=d.match(/^(\d{4})-(\d{2})/);if(!m)continue;
+    const y=+m[1],mo=+m[2];
+    if(range==='year'&&y!==cy)continue;
+    if(range==='month'&&!(y===cy&&mo===cm))continue;
+    out.push(r);
+  }
+  return out;
+}
+function taxRangeLabel(){return ({all:'全期累计',year:'本年度',month:'本月'})[taxRange];}
+/* 核心测算：返回两种身份对照 */
+function taxCompute(){
+  const rows=taxRows(taxRange);
+  let gmv=0,refund=0,promo=0,qty=0;
+  for(const r of rows){const v=r.values||{};
+    gmv+=(+v['总收入']||0);refund+=(+v['总退款']||0);
+    promo+=(+v['总推广支出']||0);qty+=(+v['总销量']||0);}
+  const unitCost=taxAvgCost();
+  const material=qty*unitCost;             // 真实物料成本
+  const netGross=gmv-refund;               // 退款后含税销售额
+  const opex=+taxOpex||0;
+  const base={gmv,refund,promo,qty,unitCost,material,netGross,opex};
+
+  /* ---- 小规模纳税人(非一般纳税人) ---- */
+  // 起征点：按月口径，本期月度净销售额是否≤10万；这里用区间均值近似（区间内月份数）
+  const months=new Set(rows.map(r=>(r.date||'').slice(0,7))).size||1;
+  const monthlyAvg=netGross/months;
+  const exemptSmall=taxVatExempt&&monthlyAvg<=100000;
+  const smallOut=netGross/(1+0.01);                 // 不含税销售额(1%征收)
+  const vatSmall=exemptSmall?0:smallOut*0.01;
+  const surSmallRate=taxHalfSurcharge?0.06:0.12;
+  const surSmall=vatSmall*surSmallRate;             // 城建+教育附加(减半)
+  const stampSmall=netGross*0.0003*(taxHalfSurcharge?0.5:1); // 购销合同万三,减半
+  const ebtSmall=netGross/(1+0.01)-material-promo-opex-surSmall-stampSmall; // 应纳税所得额
+  // 小型微利：年应纳税所得额≤300万 实际5%（本期先按区间测算，非最终汇算）
+  const citSmall=Math.max(0,ebtSmall)*0.05;
+  const totalSmall=vatSmall+surSmall+stampSmall+citSmall;
+  const afterSmall=ebtSmall-citSmall;
+
+  /* ---- 一般纳税人 ---- */
+  const outGen=netGross/(1+0.13);                   // 不含税销售额
+  const outputVat=outGen*0.13;                      // 销项
+  // 进项：物料(13%专票覆盖率) + 推广(6%现代服务专票)
+  const matInput=material*(+taxInputRate/100)/(1+0.13)*0.13;
+  const promoInput=taxPromoInput?(promo/(1+0.06)*0.06):0;
+  const inputVat=matInput+promoInput;
+  const vatGen=Math.max(0,outputVat-inputVat);
+  const surGen=vatGen*(taxHalfSurcharge?0.06:0.12);
+  const stampGen=outGen*0.0003*(taxHalfSurcharge?0.5:1);
+  // 物料不含税成本：取得专票部分价税分离(÷1.13)，未取得部分按含税全额计入
+  const materialExTax=material*((+taxInputRate/100)/1.13+(1-+taxInputRate/100));
+  const promoExTax=taxPromoInput?promo/1.06:promo;
+  const ebtGen=outGen-materialExTax-promoExTax-opex-surGen-stampGen;
+  const citGen=Math.max(0,ebtGen)*0.05;
+  const totalGen=vatGen+surGen+citGen+stampGen;
+  const afterGen=ebtGen-citGen;
+
+  return {base,months,monthlyAvg,
+    small:{exempt:exemptSmall,vat:vatSmall,sur:surSmall,stamp:stampSmall,cit:citSmall,total:totalSmall,ebt:ebtSmall,after:afterSmall},
+    general:{outputVat,inputVat,vat:vatGen,sur:surGen,stamp:stampGen,cit:citGen,total:totalGen,ebt:ebtGen,after:afterGen,
+             matInput,promoInput,materialExTax,promoExTax}};
+}
+function finViewTax(){
+  const T=taxCompute();const b=T.base;
+  const cur=taxPayer==='general'?T.general:T.small;
+  const money=v=>'¥'+(v||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const row=(k,v,sub)=>`<tr><td style="padding:8px 10px;color:var(--ink2)">${k}</td>
+    <td style="padding:8px 10px;text-align:right;font-weight:600">${v}</td>
+    <td style="padding:8px 10px;color:var(--ink3);font-size:11.5px">${sub||''}</td></tr>`;
+
+  let h='<div class="card" style="margin-bottom:14px"><div class="bar-title" style="margin-bottom:10px">🧮 电商税务测算 <span class="sub">一般纳税人 vs 小规模纳税人(非一般纳税人) · '+taxRangeLabel()+' · 单位元</span></div>'
+  +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'
+    /* 身份切换 */
+    +'<div class="seg no-print"><a class="'+(taxPayer==='small'?'on':'')+'" onclick="taxPayer=\'small\';render()">小规模纳税人</a>'
+    +'<a class="'+(taxPayer==='general'?'on':'')+'" onclick="taxPayer=\'general\';render()">一般纳税人</a></div>'
+    /* 期间切换 */
+    +'<div class="seg no-print">'
+      +[['all','全期'],['year','本年'],['month','本月']].map(t=>`<a class="${taxRange===t[0]?'on':''}" onclick="taxRange='${t[0]}';render()">${t[1]}</a>`).join('')
+    +'</div>'
+    +'<div style="margin-left:auto;font-size:11.5px;color:var(--ink3)">政策有效期至 2027-12-31</div>'
+  +'</div></div>';
+
+  /* 经营基数 */
+  h+='<div class="card"><div class="bar-title">① 经营基数 <span class="sub">来自营销日报真实数据 · '+taxRangeLabel()+'（'+T.months+'个月）</span></div>'
+   +'<div class="dkpis">'
+   +[['含税GMV',money(b.gmv)],['退款',money(b.refund)],['退款后销售额',money(b.netGross)],
+     ['推广费',money(b.promo)],['销量',b.qty+' 瓶'],['加权单位成本',money(b.unitCost)],
+     ['真实物料成本',money(b.material)],['月均销售额',money(T.monthlyAvg)]]
+    .map(([n,v])=>`<div class="dkpi"><div class="k">${n}</div><div class="v c-blue" style="font-size:16px">${v}</div></div>`).join('')
+   +'</div></div>';
+
+  /* 当前身份明细 */
+  let detail='';
+  if(taxPayer==='small'){
+    detail+='<div class="bar-title">② 增值税及附加 <span class="sub">简易计税 · 征收率1%</span></div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px">'
+      +row('不含税销售额',money(b.netGross/1.01),'含税销售额 ÷ (1+1%)')
+      +row('应纳增值税',money(T.small.vat),T.small.exempt?'✅ 月销售额≤10万，享受起征点免征':'3%减按1%征收')
+      +row('城建税及教育费附加',money(T.small.sur),'增值税×6%（12%×小微减半）')
+      +row('印花税(购销合同)',money(T.small.stamp),'万分之三，六税两费减半')
+      +'</table>'
+      +'<div class="bar-title">③ 企业所得税 <span class="sub">小型微利优惠</span></div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +row('应纳税所得额(税前利润)',money(T.small.ebt),'不含税收入−物料−推广−其他费用−附加')
+      +row('应纳企业所得税',money(T.small.cit),'小型微利实际税负 5%（应纳税所得额≤300万）')
+      +'</table>';
+  }else{
+    detail+='<div class="bar-title">② 增值税（一般计税 · 税率13%）</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px">'
+      +row('不含税销售额',money(b.netGross/1.13),'含税销售额 ÷ (1+13%)')
+      +row('销项税额',money(T.general.outputVat),'不含税销售额 × 13%')
+      +row('进项税额(物料13%)',money(T.general.matInput),'物料 '+money(b.material)+' ×专票覆盖率'+taxInputRate+'% 抵扣')
+      +row('进项税额(推广6%)',money(T.general.promoInput),taxPromoInput?'平台推广费/1.06×6%':'未取得推广专票，不计进项')
+      +row('应纳增值税',money(T.general.vat),'销项 − 进项（为负则留抵）')
+      +row('城建税及教育费附加',money(T.general.sur),'增值税×6%（小微减半）')
+      +row('印花税',money(T.general.stamp),'购销合同万三，减半')
+      +'</table>'
+      +'<div class="bar-title">③ 企业所得税</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +row('应纳税所得额',money(T.general.ebt),'不含税收入−不含税物料−不含税推广−其他费用−附加')
+      +row('应纳企业所得税',money(T.general.cit),'符合小型微利按5%，否则25%')
+      +'</table>';
+  }
+  h+='<div class="card">'+detail
+   +'<div style="margin-top:16px;padding:14px;border-radius:10px;background:linear-gradient(135deg,#eef3ff,#f6f9ff)">'
+   +'<div style="display:flex;flex-wrap:wrap;gap:24px">'
+   +`<div><div style="font-size:12px;color:var(--ink3)">税费合计</div><div style="font-size:24px;font-weight:800;color:#f54a45">${money(cur.total)}</div></div>`
+   +`<div><div style="font-size:12px;color:var(--ink3)">综合税负率</div><div style="font-size:24px;font-weight:800;color:#ff8800">${b.netGross>0?(cur.total/b.netGross*100).toFixed(2):'0.00'}%</div></div>`
+   +`<div><div style="font-size:12px;color:var(--ink3)">税后净利润</div><div style="font-size:24px;font-weight:800;color:${cur.after>=0?'#1e9e62':'#f54a45'}">${money(cur.after)}</div></div>`
+   +'</div></div></div>';
+
+  /* 两种身份对照 */
+  const cmp=(n,a,b2,diff)=>`<tr><td style="padding:7px 10px;color:var(--ink2)">${n}</td>
+    <td style="padding:7px 10px;text-align:right">${a}</td>
+    <td style="padding:7px 10px;text-align:right">${b2}</td>
+    <td style="padding:7px 10px;text-align:right;font-weight:700;color:${diff<=0?'#1e9e62':'#f54a45'}">${diff<=0?'省':'多'} ${money(Math.abs(diff))}</td></tr>`;
+  h+='<div class="card"><div class="bar-title">④ 两种身份对照 <span class="sub">同样的生意，税负差多少</span></div>'
+   +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+   +'<tr style="background:var(--bg2,#f5f6f8)"><th style="padding:8px 10px;text-align:left">项目</th><th style="padding:8px 10px;text-align:right">小规模(1%)</th><th style="padding:8px 10px;text-align:right">一般纳税人(13%)</th><th style="padding:8px 10px;text-align:right">差额</th></tr>'
+   +cmp('增值税',money(T.small.vat),money(T.general.vat),T.general.vat-T.small.vat)
+   +cmp('附加+印花税',money(T.small.sur+T.small.stamp),money(T.general.sur+T.general.stamp),(T.general.sur+T.general.stamp)-(T.small.sur+T.small.stamp))
+   +cmp('企业所得税',money(T.small.cit),money(T.general.cit),T.general.cit-T.small.cit)
+   +cmp('税费合计',money(T.small.total),money(T.general.total),T.general.total-T.small.total)
+   +cmp('税后净利润',money(T.small.after),money(T.general.after),T.small.after-T.general.after)
+   +'</table></div>';
+
+  /* 假设参数（一般纳税人） */
+  h+='<div class="card"><div class="bar-title">⑤ 测算假设 <span class="sub">可按你实际取票情况调整</span></div>'
+   +'<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;font-size:13px;line-height:2.2">'
+   +`<label>物料采购取得13%专票比例：<input type="number" value="${taxInputRate}" min="0" max="100" style="width:64px" onchange="taxInputRate=+this.value||0;render()">%</label>`
+   +`<label><input type="checkbox" ${taxPromoInput?'checked':''} onchange="taxPromoInput=this.checked;render()"> 推广费取得6%平台专票</label>`
+   +`<label><input type="checkbox" ${taxHalfSurcharge?'checked':''} onchange="taxHalfSurcharge=this.checked;render()"> 享受六税两费减半</label>`
+   +`<label><input type="checkbox" ${taxVatExempt?'checked':''} onchange="taxVatExempt=this.checked;render()"> 小规模月10万免征</label>`
+   +`<label>其他税前费用(工资/房租/物流)：<input type="number" value="${taxOpex}" style="width:110px" onchange="taxOpex=+this.value||0;render()"></label>`
+   +'</div></div>';
+
+  h+='<div class="card" style="font-size:11.5px;color:var(--ink3);line-height:1.9">'
+   +'⚠️ 口径与免责说明：①物料成本为7款核定BOM加权 '+money(b.unitCost)+'/瓶 × 真实销量，不含灌装/物流/人工/损耗；'
+   +'②企业所得税按"小型微利实际税负5%"测算（需同时满足从业人数≤300人、资产总额≤5000万、年应纳税所得额≤300万），按月度/区间累计仅为预缴参考，以年度汇算清缴为准；'
+   +'③小规模免征按本期月均销售额≤10万判定，若按季申报则以季销售额≤30万为准；'
+   +'④一般纳税人增值税取决于实际取得的进项专票，请按真实取票率调整⑤；'
+   +'⑤普通香水出厂价通常低于10元/毫升，不属"高档化妆品"消费税税目，故未计消费税；如为进口或高档品类需另行评估；'
+   +'⑥本测算为经营决策辅助，不构成税务师专业意见，实际申报以主管税务机关口径为准。</div>';
+  return h;
 }
 
 /* ===== 财务总览 ===== */
