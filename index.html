@@ -466,6 +466,18 @@ let taxPromoInput=true;    // 一般纳税人：平台推广费是否取得6%专
 let taxHalfSurcharge=true; // 六税两费附加减半(小微/个体适用)
 let taxVatExempt=true;     // 小规模月10万(季30万)起征点免征
 let taxOpex=0;             // 手工补充的其他税前费用(工资/房租/物流等)，默认0
+/* ===== v8 规模情景测算 ===== */
+let taxView='actual';       // actual=实际数据测算 | scenario=规模情景测算
+let scPrice=130;            // 售价 元/瓶
+let scCost=14;              // 产品成本 元/瓶(含税)
+let scLogi=3;               // 物流费 元/单(含税)
+let scShare=0.23;           // 股东持股比例
+let scMatRate=80;           // 物料取得13%专票比例
+let scLogiRate=90;          // 物流取得9%专票比例
+let scPromoInv=true;        // 推广取得6%专票
+let scTalentInv=false;      // 主播分成能否取得发票(MCN/个体户 6%)
+let scRoiMode='net';        // net=ROI按净回款口径(广告=GMV/(ROI+1)) | roas=按GMV口径(广告=GMV/ROI)
+let scCitMode='small';      // small=小型微利5% | normal=法定25%
 let dashTime='month';     // 仪表盘时间筛选：today|week|month|year|all
 let dashPlatform='全部';   // 仪表盘平台筛选
 const DONUT_COLORS=['#3370ff','#ff9f2b','#e0577b','#2ec5ad','#8f6bf2','#f5b93d'];
@@ -2193,6 +2205,7 @@ function taxCompute(){
              matInput,promoInput,materialExTax,promoExTax}};
 }
 function finViewTax(){
+  if(taxView==='scenario') return finViewScenario();
   const T=taxCompute();const b=T.base;
   const cur=taxPayer==='general'?T.general:T.small;
   const money=v=>'¥'+(v||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2200,7 +2213,10 @@ function finViewTax(){
     <td style="padding:8px 10px;text-align:right;font-weight:600">${v}</td>
     <td style="padding:8px 10px;color:var(--ink3);font-size:11.5px">${sub||''}</td></tr>`;
 
-  let h='<div class="card" style="margin-bottom:14px"><div class="bar-title" style="margin-bottom:10px">🧮 电商税务测算 <span class="sub">一般纳税人 vs 小规模纳税人(非一般纳税人) · '+taxRangeLabel()+' · 单位元</span></div>'
+  const subTabs=[['actual','📊 实际数据测算'],['scenario','🎯 规模情景测算']];
+  let h='<div class="card" style="margin-bottom:14px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">'
+    +'<div class="seg no-print">'+subTabs.map(t=>`<a class="${taxView===t[0]?'on':''}" onclick="taxView='${t[0]}';render()">${t[1]}</a>`).join('')+'</div>'
+    +'<div class="bar-title" style="margin:0">🧮 电商税务测算 <span class="sub">一般纳税人 vs 小规模纳税人(非一般纳税人) · '+taxRangeLabel()+' · 单位元</span></div></div>'
   +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'
     /* 身份切换 */
     +'<div class="seg no-print"><a class="'+(taxPayer==='small'?'on':'')+'" onclick="taxPayer=\'small\';render()">小规模纳税人</a>'
@@ -2293,6 +2309,163 @@ function finViewTax(){
    +'④一般纳税人增值税取决于实际取得的进项专票，请按真实取票率调整⑤；'
    +'⑤普通香水出厂价通常低于10元/毫升，不属"高档化妆品"消费税税目，故未计消费税；如为进口或高档品类需另行评估；'
    +'⑥本测算为经营决策辅助，不构成税务师专业意见，实际申报以主管税务机关口径为准。</div>';
+  return h;
+}
+
+/* ============================================================
+   v8 规模情景测算（沿用豆包矩阵：月流水×ROI×主播分成，税务算法按现行税法修正）
+   修正点：增值税一般计税=销项-进项、小规模1%/免征；增值税为价外税不重复扣；
+   补附加税费；推广6%/物流9%/物料13%进项；主播劳务无票做纳税调增提示；分红20%
+   ============================================================ */
+function scAdFee(gmv,roi){return scRoiMode==='net'?gmv/(roi+1):gmv/roi;}
+/* 单情景测算：返回公司/股东两条线，两种身份 */
+function scCalc(gmvWan,roi,talentRate){
+  const gmv=gmvWan*10000;
+  const qty=gmv/scPrice;
+  const cogs=qty*scCost;                 // 含税货品成本
+  const logi=qty*scLogi;                 // 含税物流
+  const ad=scAdFee(gmv,roi);             // 推广费(含税)
+  const talent=gmv*talentRate;           // 主播分成(含税口径)
+  const opex=0;                          // 预留工资房租等
+  const half=true;                       // 六税两费减半
+  const surR=half?0.06:0.12;
+
+  /* ---------- 一般纳税人 ---------- */
+  const salesEx=gmv/1.13;                       // 不含税收入
+  const outVat=salesEx*0.13;                   // 销项
+  const matIn =cogs*(scMatRate/100)/1.13*0.13;          // 物料13%进项
+  const logiIn=logi*(scLogiRate/100)/1.09*0.09;         // 物流9%进项
+  const adIn  =scPromoInv?ad/1.06*0.06:0;               // 推广6%进项
+  const talIn =scTalentInv?talent/1.06*0.06:0;          // 主播服务费6%进项
+  const inVat=matIn+logiIn+adIn+talIn;
+  const vatG=Math.max(0,outVat-inVat);
+  const surG=vatG*surR;
+  const stampG=salesEx*0.0003*(half?0.5:1);
+  // 不含税成本费用（能取票部分价税分离；无票部分按含税计入但要纳税调增）
+  const cogsEx=cogs*((scMatRate/100)/1.13+(1-scMatRate/100));
+  const logiEx=logi*((scLogiRate/100)/1.09+(1-scLogiRate/100));
+  const adEx=scPromoInv?ad/1.06:ad;
+  const talEx=scTalentInv?talent/1.06:talent;
+  let ebtG=salesEx-cogsEx-logiEx-adEx-talEx-opex-surG-stampG;
+  // 无票纳税调增：主播分成无发票 / 物料未取票部分，企业所得税前不得扣除
+  const addBack=(scTalentInv?0:talent)+cogs*(1-scMatRate/100)+logi*(1-scLogiRate/100);
+  const taxableG=Math.max(0,ebtG+addBack);
+  const citRateG=scCitMode==='small'?0.05:0.25;
+  const citG=taxableG*citRateG;
+  const netG=ebtG-citG;                            // 税后净利（按会计利润扣税）
+  const divPreG=netG*scShare;
+  const divTaxG=Math.max(0,divPreG)*0.20;
+  const divHandG=divPreG-divTaxG;
+  const taxTotG=vatG+surG+stampG+citG;
+
+  /* ---------- 小规模纳税人 ---------- */
+  // 起征点：按月判定（情景为月流水）
+  const exemptS=gmv<=100000;
+  const salesS=gmv/1.01;
+  const vatS=exemptS?0:salesS*0.01;
+  const surS=vatS*surR;
+  const stampS=salesS*0.0003*(half?0.5:1);
+  // 小规模不能抵进项，成本费用按含税全额计入
+  let ebtS=salesS-cogs-logi-ad-talent-opex-surS-stampS;
+  const addBackS=(scTalentInv?0:talent);   // 主播无票仍不能税前扣除（物料物流小规模全额计入，不调增）
+  const taxableS=Math.max(0,ebtS+addBackS);
+  const citRateS=scCitMode==='small'?0.05:0.25;
+  const citS=taxableS*citRateS;
+  const netS=ebtS-citS;
+  const divPreS=netS*scShare;
+  const divTaxS=Math.max(0,divPreS)*0.20;
+  const divHandS=divPreS-divTaxS;
+  const taxTotS=vatS+surS+stampS+citS;
+
+  return {gmv,qty,cogs,logi,ad,talent,
+    G:{salesEx:salesEx,outVat,inVat,vat:vatG,sur:surG,stamp:stampG,ebt:ebtG,addBack,taxable:taxableG,cit:citG,net:netG,divPre:divPreG,divTax:divTaxG,divHand:divHandG,taxTot:taxTotG},
+    S:{exempt:exemptS,salesEx:salesS,vat:vatS,sur:surS,stamp:stampS,ebt:ebtS,addBack:addBackS,taxable:taxableS,cit:citS,net:netS,divPre:divPreS,divTax:divTaxS,divHand:divHandS,taxTot:taxTotS}};
+}
+function finViewScenario(){
+  const money=v=>'¥'+(v||0).toLocaleString('zh-CN',{minimumFractionDigits:0,maximumFractionDigits:0});
+  const w2=v=>(v/10000).toFixed(1)+'万';
+  const rows=[500,800,1000];
+  const rois=[2,3,4,5];
+  const shares=[0.25,0.30];
+  const inp=(label,html)=>`<label style="white-space:nowrap;font-size:12.5px">${label} ${html}</label>`;
+
+  let h='<div class="card" style="margin-bottom:14px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">'
+    +'<div class="seg no-print"><a class="'+(taxView==='actual'?'':'')+'" onclick="taxView=\'actual\';render()">📊 实际数据测算</a>'
+    +'<a class="on" onclick="taxView=\'scenario\';render()">🎯 规模情景测算</a></div>'
+    +'<div class="bar-title" style="margin:0">规模情景测算 <span class="sub">月流水 × ROI × 主播分成 · 双身份对照 · 单位万元</span></div></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:16px;line-height:2;font-size:13px">'
+    +inp('售价',`<input type="number" value="${scPrice}" style="width:60px" onchange="scPrice=+this.value||0;render()">`)
+    +inp('产品成本',`<input type="number" value="${scCost}" style="width:60px" onchange="scCost=+this.value||0;render()">`)
+    +inp('物流费/单',`<input type="number" value="${scLogi}" style="width:50px" onchange="scLogi=+this.value||0;render()">`)
+    +inp('持股比例',`<input type="number" value="${(scShare*100).toFixed(0)}" style="width:50px" onchange="scShare=(+this.value||0)/100;render()">%`)
+    +inp('物料专票',`<input type="number" value="${scMatRate}" style="width:50px" onchange="scMatRate=+this.value||0;render()">%`)
+    +inp('物流专票',`<input type="number" value="${scLogiRate}" style="width:50px" onchange="scLogiRate=+this.value||0;render()">%`)
+    +`<label style="white-space:nowrap;font-size:12.5px"><input type="checkbox" ${scPromoInv?'checked':''} onchange="scPromoInv=this.checked;render()"> 推广6%专票</label>`
+    +`<label style="white-space:nowrap;font-size:12.5px"><input type="checkbox" ${scTalentInv?'checked':''} onchange="scTalentInv=this.checked;render()"> 主播能开票(MCN/个体户)</label>`
+    +`<label style="white-space:nowrap;font-size:12.5px">ROI口径 <select onchange="scRoiMode=this.value;render()"><option value="net" ${scRoiMode==='net'?'selected':''}>净回款(广告=GMV/(ROI+1))</option><option value="roas" ${scRoiMode==='roas'?'selected':''}>GMV口径(广告=GMV/ROI)</option></select></label>`
+    +`<label style="white-space:nowrap;font-size:12.5px">所得税 <select onchange="scCitMode=this.value;render()"><option value="small" ${scCitMode==='small'?'selected':''}>小微5%</option><option value="normal" ${scCitMode==='normal'?'selected':''}>法定25%</option></select></label>`
+    +'</div></div>';
+
+  for(const share of shares){
+    h+=`<div class="card"><div class="bar-title">主播分成 ${(share*100).toFixed(0)}% <span class="sub">每格：公司税后净利 / 你的分红到手(月)；左上小规模，右下一般纳税人</span></div>`;
+    h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tr style="background:#f5f6f8"><th style="padding:8px;text-align:left">月流水</th>';
+    for(const r of rois) h+=`<th style="padding:8px;text-align:center">ROI ${r}</th>`;
+    h+='</tr>';
+    for(const w of rows){
+      h+=`<tr><td style="padding:8px 10px;font-weight:700">${w}万</td>`;
+      for(const r of rois){
+        const c=scCalc(w,r,share);
+        const pick=(o)=>o;
+        // 小规模为主、一般纳税人为副
+        const s=c.S,g=c.G;
+        const betterS=s.net>=g.net;
+        h+=`<td style="padding:6px;text-align:center;border:1px solid #eef0f3">
+          <div style="color:${betterS?'#1e9e62':'#9aa3af'};font-weight:700">小规模 ${w2(s.net)}</div>
+          <div style="color:var(--ink3);font-size:11.5px">到手 ${w2(s.divHand)}</div>
+          <div style="color:${!betterS?'#1e9e62':'#9aa3af'};font-weight:700;margin-top:3px;border-top:1px dashed #eee;padding-top:3px">一般 ${w2(g.net)}</div>
+          <div style="color:var(--ink3);font-size:11.5px">到手 ${w2(g.divHand)}</div>
+        </td>`;
+      }
+      h+='</tr>';
+    }
+    h+='</table></div>';
+  }
+
+  // 单档明细（默认取 800万 ROI3 分成25%）
+  const d=scCalc(800,3,0.25);
+  const drow=(k,vs,vg)=>`<tr><td style="padding:7px 10px;color:var(--ink2)">${k}</td>
+    <td style="padding:7px 10px;text-align:right">${vs}</td>
+    <td style="padding:7px 10px;text-align:right">${vg}</td></tr>`;
+  h+='<div class="card"><div class="bar-title">示例明细：月流水800万 · ROI 3 · 分成25% <span class="sub">看懂每一分钱怎么分</span></div>'
+   +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+   +'<tr style="background:#f5f6f8"><th style="padding:8px 10px;text-align:left">项目</th><th style="padding:8px 10px;text-align:right">小规模</th><th style="padding:8px 10px;text-align:right">一般纳税人</th></tr>'
+   +drow('含税GMV',money(d.gmv),money(d.gmv))
+   +drow('销量(瓶)',d.qty.toFixed(0),d.qty.toFixed(0))
+   +drow('货品成本',money(d.cogs),money(d.cogs))
+   +drow('物流费',money(d.logi),money(d.logi))
+   +drow('推广费',money(d.ad),money(d.ad))
+   +drow('主播分成',money(d.talent),money(d.talent))
+   +drow('不含税销售额',money(d.S.salesEx),money(d.G.salesEx))
+   +drow('增值税(销项-进项)',(d.S.exempt?'免征':money(d.S.vat)),money(d.G.vat)+` <span style="color:var(--ink3);font-size:11px">(销项${money(d.G.outVat)}-进项${money(d.G.inVat)})</span>`)
+   +drow('附加税费+印花税',money(d.S.sur+d.S.stamp),money(d.G.sur+d.G.stamp))
+   +drow('会计利润(税前)',money(d.S.ebt),money(d.G.ebt))
+   +(d.S.addBack>0||d.G.addBack>0?drow('无票纳税调增',money(d.S.addBack),money(d.G.addBack)):'')
+   +drow('应纳税所得额',money(d.S.taxable),money(d.G.taxable))
+   +drow('企业所得税',money(d.S.cit),money(d.G.cit))
+   +`<tr style="background:#eef3ff"><td style="padding:9px 10px;font-weight:700">公司税后净利</td><td style="padding:9px 10px;text-align:right;font-weight:800;color:#1e9e62">${money(d.S.net)}</td><td style="padding:9px 10px;text-align:right;font-weight:800;color:#1e9e62">${money(d.G.net)}</td></tr>`
+   +drow('税费合计',money(d.S.taxTot),money(d.G.taxTot))
+   +drow(`你的分红税前(持股${(scShare*100).toFixed(0)}%)`,money(d.S.divPre),money(d.G.divPre))
+   +drow('分红个税20%',money(d.S.divTax),money(d.G.divTax))
+   +`<tr style="background:#e9f9f0"><td style="padding:9px 10px;font-weight:700">你实际到手(月)</td><td style="padding:9px 10px;text-align:right;font-weight:800;color:#0a7d4a">${money(d.S.divHand)}</td><td style="padding:9px 10px;text-align:right;font-weight:800;color:#0a7d4a">${money(d.G.divHand)}</td></tr>`
+   +'</table></div>';
+
+  h+='<div class="card" style="font-size:11.5px;color:var(--ink3);line-height:1.9">'
+   +'⚠️ 口径说明：①本表为<b>规划用情景模型</b>（月流水500/800/1000万为假设档位，非你当前真实数据），真实经营请看「📊实际数据测算」；'
+   +'②增值税为<b>价外税</b>，一般纳税人=销项13%−进项（物料13%/物流9%/推广6%/主播6%），小规模3%减按1%、月销售额≤10万免征；增值税<b>不再</b>从利润里重复扣；'
+   +'③附加税费=增值税×6%（城建+教育附加12%×六税两费减半），购销合同印花税万三减半；'
+   +'④企业所得税：小型微利实际5%（应纳税所得额≤300万、从业≤300人、资产≤5000万），超档按25%；'
+   +'⑤<b>无票支出</b>不得税前扣除：主播以个人名义合作且无发票，分成须做纳税调增，并由公司代扣劳务报酬个税(20%-40%预扣)；让主播走合规MCN/个体户开票才可抵进项并税前扣除；'
+   +'⑥股东分红个税20%；普通香水不属高档化妆品、无消费税；本模型不含灌装/人工/平台扣点等，仅辅助决策，以税务师及主管税务机关口径为准。</div>';
   return h;
 }
 
